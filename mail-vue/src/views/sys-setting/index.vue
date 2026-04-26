@@ -192,6 +192,18 @@
                 </div>
               </div>
               <div class="setting-item">
+                <div>
+                  <span>{{ $t('externalApiKey') }}</span>
+                  <el-tooltip effect="dark" :content="$t('externalApiKeyDesc')">
+                    <Icon class="warning" icon="fe:warning" width="18" height="18"/>
+                  </el-tooltip>
+                </div>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                  <el-input v-model="setting.externalApiKey" size="small" style="width: 280px" :placeholder="$t('externalApiKeyPlaceholder')" readonly/>
+                  <el-button size="small" type="primary" @click="generateApiKey">{{ $t('generate') }}</el-button>
+                </div>
+              </div>
+              <div class="setting-item">
                 <div><span>{{ $t('resendToken') }}</span></div>
                 <div>
                   <el-button class="opt-button" style="margin-top: 0" @click="openResendList" size="small"
@@ -1254,6 +1266,13 @@ function openCut() {
 function saveR2domain() {
   const settingForm = {r2Domain: r2DomainInput.value}
   editSetting(settingForm)
+}
+
+function generateApiKey() {
+  const key = Array.from(crypto.getRandomValues(new Uint8Array(32)))
+    .map(b => b.toString(16).padStart(2, '0')).join('')
+  setting.value.externalApiKey = key
+  change({ externalApiKey: key })
 }
 
 function openResendForm() {
