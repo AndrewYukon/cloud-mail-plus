@@ -131,6 +131,11 @@ export const settingConst = {
 	authRefresh: {
 		OPEN: 1,
 		CLOSE: 0
+	},
+	emailProvider: {
+		CF_FIRST: 'cf-first',
+		RESEND_ONLY: 'resend-only',
+		CF_ONLY: 'cf-only'
 	}
 }
 

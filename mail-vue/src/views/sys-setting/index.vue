@@ -177,6 +177,21 @@
                 </div>
               </div>
               <div class="setting-item">
+                <div>
+                  <span>{{ $t('emailProvider') }}</span>
+                  <el-tooltip effect="dark" :content="$t('emailProviderDesc')">
+                    <Icon class="warning" icon="fe:warning" width="18" height="18"/>
+                  </el-tooltip>
+                </div>
+                <div>
+                  <el-select v-model="setting.emailProvider" @change="change" size="small" style="width: 200px">
+                    <el-option value="cf-first" :label="$t('cfFirst')"/>
+                    <el-option value="resend-only" :label="$t('resendOnly')"/>
+                    <el-option value="cf-only" :label="$t('cfOnly')"/>
+                  </el-select>
+                </div>
+              </div>
+              <div class="setting-item">
                 <div><span>{{ $t('resendToken') }}</span></div>
                 <div>
                   <el-button class="opt-button" style="margin-top: 0" @click="openResendList" size="small"
