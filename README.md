@@ -248,6 +248,14 @@ Cloudflare Workers 无法运行 IMAP/SMTP 等 TCP 协议服务。如需在 Outlo
 
 ---
 
+## 支持项目
+
+如果这个项目对你有帮助，欢迎请我喝杯咖啡 ☕
+
+<img src="doc/demo/Buy-me-a-coffee-WeChat.JPG" width="200" />
+
+---
+
 ## License
 
 MIT — 与原项目一致。详见 [LICENSE](LICENSE)。
