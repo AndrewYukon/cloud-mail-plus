@@ -58,7 +58,38 @@ API Key 在管理后台 **设置 → 外部 API 密钥** 中生成。
 
 详细文档：[External API Guide](docs/external-api-guide.md)
 
-### 3. D1 自动备份到 R2
+### 3. 邮件删除 API + R2 附件清理
+
+外部 API 新增邮件删除端点，永久删除时同步清理 R2/S3/KV 中的附件文件。
+
+```bash
+# 软删除（标记删除，可恢复）
+curl -X DELETE "https://your-domain.com/api/external/email/123" -H "X-API-Key: KEY"
+
+# 永久删除（删除邮件 + R2 附件 + 收藏）
+curl -X DELETE "https://your-domain.com/api/external/email/123/permanent" -H "X-API-Key: KEY"
+
+# 批量删除
+curl -X POST "https://your-domain.com/api/external/email/batch-delete" \
+  -H "X-API-Key: KEY" -H "Content-Type: application/json" \
+  -d '{"emailIds":[1,2,3],"permanent":true}'
+```
+
+### 4. 新用户注册通知
+
+新用户注册时自动发送通知到 Telegram Bot 和管理员邮箱（通过 CF Email Service）。无需额外配置 — 使用已有的 Telegram Bot 设置。
+
+### 5. 管理员密码重置
+
+忘记管理员密码时，通过 JWT Secret 重置：
+
+```bash
+curl -X POST "https://your-domain.com/api/reset-admin/<jwt_secret>" \
+  -H "Content-Type: application/json" \
+  -d '{"password":"newpassword"}'
+```
+
+### 6. D1 自动备份到 R2
 
 Worker 内置 cron 定时任务，每天自动导出 D1 全量数据为 SQL 并 gzip 压缩上传到 R2。
 
@@ -158,6 +189,30 @@ https://your-worker.workers.dev/api/init/<your-jwt-secret>
 | 附件 `disposition` | **必填**，值为 `"attachment"` 或 `"inline"` |
 | 发件状态 | 同步返回成功/失败，无 webhook 回调（与 Resend 不同） |
 | 收件人上限 | to + cc + bcc 总计不超过 50 |
+
+---
+
+## 常见问题
+
+### 子域名 catch-all 邮件路由（主域名已绑定其他邮件服务）
+
+如果你的主域名（如 `example.com`）已绑定其他邮件服务（如 Google Workspace），无法在 Cloudflare 开启 Email Routing，可以使用子域名：
+
+1. 在 Cloudflare Dashboard 为子域名 `mail.example.com` 开启 Email Routing
+2. 设置 catch-all → cloud-mail Worker
+3. 在 `wrangler.toml` 的 `domain` 中添加 `"mail.example.com"`
+4. 用户邮箱格式变为 `user@mail.example.com`
+
+注意：子域名和主域名的 Email Routing 是独立的，互不影响。
+
+### IMAP/POP3/SMTP 客户端支持（Outlook/Thunderbird）
+
+Cloudflare Workers 无法运行 IMAP/SMTP 等 TCP 协议服务。如需在 Outlook 等客户端中收发邮件，推荐搭配 [Stalwart Mail Server](https://github.com/stalwartlabs/stalwart) 使用：
+
+- 部署指南：[stalwart-mail-deploy](https://github.com/AndrewYukon/stalwart-mail-deploy)
+- Stalwart 提供 IMAP (993) + SMTP (465) 给 Outlook
+- Cloud-Mail Plus 通过 External API 提供发件（走 CF Email Service，更高信誉度）
+- 可通过 Mail Bridge 组件将两者打通（详见 stalwart-mail-deploy 的 [Cloudflare Workers 策略](https://github.com/AndrewYukon/stalwart-mail-deploy/tree/main/outbound-strategies/cloudflare-workers)）
 
 ---
 

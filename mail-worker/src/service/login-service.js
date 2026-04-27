@@ -138,6 +138,13 @@ const loginService = {
 			await regKeyService.reduceCount(c, code, 1);
 		}
 
+		// Notify admin about new user registration (#312)
+		try {
+			await this.notifyNewUser(c, email);
+		} catch (e) {
+			console.error('[register] notification failed:', e.message);
+		}
+
 		if (registerVerify === settingConst.registerVerify.COUNT && !regVerifyOpen) {
 			const row = await verifyRecordService.increaseRegCount(c);
 			return {regVerifyOpen: row.count >= regVerifyCount}
@@ -145,6 +152,34 @@ const loginService = {
 
 		return {regVerifyOpen}
 
+	},
+
+	async notifyNewUser(c, email) {
+		const { tgBotToken, tgChatId, tgBotStatus } = await settingService.query(c);
+
+		// Telegram notification
+		if (tgBotStatus === settingConst.tgBotStatus.OPEN && tgChatId && tgBotToken) {
+			const msg = `📬 New user registered\n\nEmail: ${email}\nTime: ${new Date().toISOString()}`;
+			await fetch(`https://api.telegram.org/bot${tgBotToken}/sendMessage`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ chat_id: tgChatId, text: msg }),
+			}).catch(() => {});
+		}
+
+		// Admin email notification (via CF Email Service if available)
+		if (c.env.admin && c.env.EMAIL) {
+			try {
+				await c.env.EMAIL.send({
+					from: { name: 'Cloud Mail', email: c.env.admin },
+					to: c.env.admin,
+					subject: `New user registered: ${email}`,
+					text: `A new user has registered on your Cloud Mail instance.\n\nEmail: ${email}\nTime: ${new Date().toISOString()}`,
+				});
+			} catch (e) {
+				console.error('[register] admin email notification failed:', e.message);
+			}
+		}
 	},
 
 	async registerVerify() {

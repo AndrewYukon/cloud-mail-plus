@@ -3,12 +3,15 @@ import result from '../model/result';
 import BizError from '../error/biz-error';
 import settingService from '../service/setting-service';
 import cfEmailService from '../service/cf-email-service';
+import emailService from '../service/email-service';
+import attService from '../service/att-service';
+import starService from '../service/star-service';
 import { Resend } from 'resend';
-import { emailConst, settingConst } from '../const/entity-const';
+import { emailConst, settingConst, isDel } from '../const/entity-const';
 import emailUtils from '../utils/email-utils';
 import orm from '../entity/orm';
 import email from '../entity/email';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 
 /**
  * External API for other apps to send email through Cloud-Mail.
@@ -181,4 +184,74 @@ app.get('/external/status/:emailId', async (c) => {
 		message: emailRow.message,
 		createTime: emailRow.createTime,
 	}));
+});
+
+// --- Delete email (soft delete) ---
+app.delete('/external/email/:emailId', async (c) => {
+	await verifyApiKey(c);
+
+	const emailId = Number(c.req.param('emailId'));
+	if (!emailId || isNaN(emailId)) {
+		throw new BizError('Invalid emailId');
+	}
+
+	const emailRow = await orm(c).select().from(email).where(eq(email.emailId, emailId)).get();
+	if (!emailRow) {
+		throw new BizError('Email not found', 404);
+	}
+
+	await orm(c).update(email).set({ isDel: isDel.DELETE }).where(eq(email.emailId, emailId)).run();
+
+	return c.json(result.ok({ emailId, deleted: true }));
+});
+
+// --- Permanently delete email + R2 attachments (#293 + #318) ---
+app.delete('/external/email/:emailId/permanent', async (c) => {
+	await verifyApiKey(c);
+
+	const emailId = Number(c.req.param('emailId'));
+	if (!emailId || isNaN(emailId)) {
+		throw new BizError('Invalid emailId');
+	}
+
+	const emailRow = await orm(c).select().from(email).where(eq(email.emailId, emailId)).get();
+	if (!emailRow) {
+		throw new BizError('Email not found', 404);
+	}
+
+	// Delete attachments from R2/S3/KV + DB
+	await attService.removeByEmailIds(c, [emailId]);
+	// Delete stars
+	await starService.removeByEmailIds(c, [emailId]);
+	// Delete email record
+	await orm(c).delete(email).where(eq(email.emailId, emailId)).run();
+
+	return c.json(result.ok({ emailId, permanentlyDeleted: true }));
+});
+
+// --- Batch delete emails ---
+app.post('/external/email/batch-delete', async (c) => {
+	await verifyApiKey(c);
+
+	const body = await c.req.json();
+	const { emailIds, permanent } = body;
+
+	if (!emailIds || !Array.isArray(emailIds) || emailIds.length === 0) {
+		throw new BizError('emailIds array is required');
+	}
+	if (emailIds.length > 100) {
+		throw new BizError('Maximum 100 emails per batch');
+	}
+
+	const ids = emailIds.map(Number).filter(id => !isNaN(id));
+
+	if (permanent) {
+		await attService.removeByEmailIds(c, ids);
+		await starService.removeByEmailIds(c, ids);
+		await orm(c).delete(email).where(inArray(email.emailId, ids)).run();
+	} else {
+		await orm(c).update(email).set({ isDel: isDel.DELETE }).where(inArray(email.emailId, ids)).run();
+	}
+
+	return c.json(result.ok({ deleted: ids.length, permanent: !!permanent }));
 });

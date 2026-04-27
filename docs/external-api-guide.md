@@ -127,6 +127,57 @@ curl -X POST "https://your-worker-domain.com/api/external/send" \
 
 ---
 
+## Delete Email
+
+### Soft Delete
+
+```
+DELETE /api/external/email/:emailId
+```
+
+Marks the email as deleted (recoverable). Returns `{ emailId, deleted: true }`.
+
+### Permanent Delete (+ R2 Attachment Cleanup)
+
+```
+DELETE /api/external/email/:emailId/permanent
+```
+
+Permanently deletes the email, its R2/S3/KV attachments, and stars. Irreversible.
+
+### Batch Delete
+
+```
+POST /api/external/email/batch-delete
+```
+
+```json
+{
+  "emailIds": [1, 2, 3],
+  "permanent": true
+}
+```
+
+Max 100 emails per batch. Set `permanent: false` for soft delete.
+
+---
+
+## Admin Password Reset
+
+If you forget the admin password:
+
+```
+POST /api/reset-admin/:jwt_secret
+```
+
+```json
+{ "password": "newpassword" }
+```
+
+Protected by JWT secret (same as init endpoint). No auth header needed.
+
+---
+
 ## Send Priority
 
 Configurable in admin Settings > Email Provider:
