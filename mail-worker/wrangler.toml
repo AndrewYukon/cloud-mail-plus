@@ -6,18 +6,18 @@ keep_vars = true
 [observability]
 enabled = true
 
-[[d1_databases]]
-binding = "db"
-database_name = "cloud-mail"
-database_id = "93ee203d-0336-4c43-b262-d8baace697e6"
+#[[d1_databases]]
+#binding = "db"			# D1 database binding (do not change)
+#database_name = ""		# Your D1 database name
+#database_id = ""		# Your D1 database ID
 
-[[kv_namespaces]]
-binding = "kv"
-id = "f6c918e2164243d9bd9f135a7b2f29cf"
+#[[kv_namespaces]]
+#binding = "kv"			# KV binding (do not change)
+#id = ""				# Your KV namespace ID
 
-[[r2_buckets]]
-binding = "r2"
-bucket_name = "cloud-mail-r2"
+#[[r2_buckets]]
+#binding = "r2"			# R2 binding (do not change)
+#bucket_name = ""		# Your R2 bucket name
 
 [assets]
 binding = "assets"
@@ -26,16 +26,17 @@ not_found_handling = "single-page-application"
 run_worker_first = true
 
 [triggers]
-crons = ["0 16 * * *"]
+crons = ["0 16 * * *"]	# Daily housekeeping at 16:00 UTC
 
-[[send_email]]
-name = "EMAIL"
+# Uncomment to enable Cloudflare Email Service for outbound sending
+#[[send_email]]
+#name = "EMAIL"
 
-[vars]
-orm_log = false
-domain = '["owaa.ai","blizzarddelights.com"]'
-admin = "admin@blizzarddelights.com"
-jwt_secret = "BduFfk8j8P9WM9ImhkjD7fMS8RaOZB1v757luWaF"
+#[vars]
+#orm_log = false
+#domain = '["example.com"]'	# Your email domains (array)
+#admin = "admin@example.com"	# Admin email address
+#jwt_secret = ""				# Random string for JWT signing
 
 [build]
 command = "pnpm --prefix ../mail-vue install && pnpm --prefix ../mail-vue run build"

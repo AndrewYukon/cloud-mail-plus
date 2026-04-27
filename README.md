@@ -1,156 +1,198 @@
 <p align="center">
     <img src="doc/demo/logo.png" width="80px" />
-    <h1 align="center">Cloud Mail</h1>
-    <p align="center">基于 Cloudflare 的简约响应式邮箱服务，支持邮件发送、附件收发 🎉</p> 
+    <h1 align="center">Cloud Mail Plus</h1>
+    <p align="center">Cloudflare Workers 邮箱服务增强版 — Cloudflare Email Service 原生发件 + 外部 API + D1 自动备份</p>
     <p align="center">
-        简体中文 | <a href="/README-en.md" style="margin-left: 5px">English </a>
+        简体中文 | <a href="/README-en.md">English</a>
     </p>
     <p align="center">
-        <a href="https://github.com/maillab/cloud-mail/tree/main?tab=MIT-1-ov-file" target="_blank" >
+        <a href="https://github.com/AndrewYukon/cloud-mail-plus/blob/main/LICENSE">
             <img src="https://img.shields.io/badge/license-MIT-green" />
-        </a>    
-        <a href="https://github.com/maillab/cloud-mail/releases" target="_blank" >
-            <img src="https://img.shields.io/github/v/release/maillab/cloud-mail" alt="releases" />
-        </a>  
-        <a href="https://github.com/maillab/cloud-mail/issues" >
-            <img src="https://img.shields.io/github/issues/maillab/cloud-mail" alt="issues" />
-        </a>  
-        <a href="https://github.com/maillab/cloud-mail/stargazers" target="_blank">
-            <img src="https://img.shields.io/github/stars/maillab/cloud-mail" alt="stargazers" />
-        </a>  
-        <a href="https://github.com/maillab/cloud-mail/forks" target="_blank" >
-            <img src="https://img.shields.io/github/forks/maillab/cloud-mail" alt="forks" />
-        </a>
-    </p>
-    <p align="center">
-        <a href="https://trendshift.io/repositories/14418" target="_blank" >
-            <img src="https://trendshift.io/api/badge/repositories/14418" alt="trendshift" >
         </a>
     </p>
 </p>
 
+## Credits
 
-## 项目简介
+本项目基于 [maillab/cloud-mail](https://github.com/maillab/cloud-mail) 开发，在其优秀的 Cloudflare Workers 邮箱服务基础上新增了以下功能。感谢原作者的开源贡献。
 
-只需要一个域名，就可以创建多个不同的邮箱，类似各大邮箱平台，本项目支持署到 Cloudflare Workers ，降低服务器成本，搭建自己的邮箱服务
+## 新增功能
 
-## 项目展示
+### 1. Cloudflare Email Service 集成
 
-- [在线演示](https://skymail.ink)<br>
-- [部署文档](https://doc.skymail.ink)<br>
+使用 Cloudflare 原生 `send_email` Workers binding 发送邮件，替代 Resend 作为主要发送方式。
 
-| ![](/doc/demo/demo1.png) | ![](/doc/demo/demo2.png) |
-|-----------------------|-----------------------|
-| ![](/doc/demo/demo3.png) | ![](/doc/demo/demo4.png) |
+- **CF 优先模式**（默认）：先通过 Cloudflare Email Service 发送，失败自动回退 Resend
+- **仅 Resend 模式**：与原版行为一致
+- **仅 CF 模式**：只用 Cloudflare，无回退
 
+优势：
+- 无需第三方 API key（Cloudflare 自动管理 SPF/DKIM/DMARC）
+- 更好的发件信誉度（Cloudflare IP 而非自建服务器 IP）
+- 零额外成本（Workers 付费计划已包含）
 
+在管理后台 **设置 → 邮件发送方式** 中切换。
 
+### 2. External API（外部发件 API）
 
-## 功能介绍
+允许其他应用通过 HTTP API 发送邮件和查询状态，支持所有已配置的域名。
 
-- **💰 低成本使用**： 可部署到 Cloudflare Workers 降低服务器成本
+```bash
+# 发送邮件
+curl -X POST "https://your-domain.com/api/external/send" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: YOUR_API_KEY" \
+  -d '{
+    "from": "App <noreply@example.com>",
+    "to": "user@gmail.com",
+    "subject": "Hello",
+    "html": "<p>Hello world</p>"
+  }'
 
-- **💻 响应式设计**：响应式布局自动适配PC和大部分手机端浏览器
+# 查询状态
+curl "https://your-domain.com/api/external/status/9" \
+  -H "X-API-Key: YOUR_API_KEY"
+```
 
-- **📧 邮件发送**：集成Resend发送邮件，支持群发，内嵌图片和附件发送，发送状态查看
+API Key 在管理后台 **设置 → 外部 API 密钥** 中生成。
 
-- **🛡️ 管理员功能**：可以对用户，邮件进行管理，RABC权限控制对功能及使用资源限制
+详细文档：[External API Guide](docs/external-api-guide.md)
 
-- **📦 附件收发**：支持收发附件，使用R2对象存储保存和下载文件
+### 3. D1 自动备份到 R2
 
-- **🔔 邮件推送**：接收邮件后可以转发到TG机器人或其他服务商邮箱
+Worker 内置 cron 定时任务，每天自动导出 D1 全量数据为 SQL 并 gzip 压缩上传到 R2。
 
-- **📡 开放API**：支持使用API批量生成用户，多条件查询邮件 
+- 每天 02:00 UTC 自动运行
+- 保留最近 30 个备份，自动清理旧备份
+- 零外部依赖 — 完全在 Cloudflare 内部完成
+- 支持手动触发：`POST /api/backup/<jwt_secret>`
+- 查看备份列表：`GET /api/backup/<jwt_secret>/list`
 
-- **📈 数据可视化**：使用ECharts对系统数据详情，用户邮件增长可视化显示
+---
 
-- **🎨 个性化设置**：可以自定义网站标题，登录背景，透明度
+## 部署
 
-- **🤖 人机验证**：集成Turnstile人机验证，防止人机批量注册
+### 前置条件
 
-- **📜 更多功能**：正在开发中...
+- [Cloudflare](https://dash.cloudflare.com) 账号
+- [Node.js](https://nodejs.org/) 16.17+
+- 域名已添加到 Cloudflare DNS
 
+### 步骤
 
+1. **克隆仓库**
+
+```bash
+git clone https://github.com/AndrewYukon/cloud-mail-plus.git
+cd cloud-mail-plus
+```
+
+2. **创建 Cloudflare 资源**
+
+```bash
+cd mail-worker
+wrangler d1 create cloud-mail
+wrangler kv namespace create cloud-mail-kv
+wrangler r2 bucket create cloud-mail-r2
+```
+
+3. **配置 `wrangler.toml`**
+
+将上一步生成的 ID 填入 `wrangler.toml`：
+
+```toml
+[[d1_databases]]
+binding = "db"
+database_name = "cloud-mail"
+database_id = "<your-d1-id>"
+
+[[kv_namespaces]]
+binding = "kv"
+id = "<your-kv-id>"
+
+[[r2_buckets]]
+binding = "r2"
+bucket_name = "cloud-mail-r2"
+
+[vars]
+domain = '["example.com"]'
+admin = "admin@example.com"
+jwt_secret = "<random-string>"
+```
+
+4. **启用 Cloudflare Email Service（可选）**
+
+在 Cloudflare Dashboard → Email → Email Sending 中 onboard 你的域名，然后在 `wrangler.toml` 中取消注释：
+
+```toml
+[[send_email]]
+name = "EMAIL"
+```
+
+5. **部署**
+
+```bash
+wrangler deploy
+```
+
+6. **初始化数据库**
+
+```
+https://your-worker.workers.dev/api/init/<your-jwt-secret>
+```
+
+7. **注册管理员账号**
+
+访问你的 Worker URL，用 `admin` 配置中的邮箱注册。
+
+---
+
+## CF Email Service API 注意事项
+
+在集成 Cloudflare Email Service 时发现的 API 细节（文档未充分说明）：
+
+| 项目 | 说明 |
+|------|------|
+| `from` 字段 | 必须是 `{ name, email }` 对象，不能用 `"Name <email>"` 字符串格式 |
+| 附件 `type` 字段 | MIME 类型字段名是 `type`，不是 `mimeType` 或 `contentType` |
+| 附件 `disposition` | **必填**，值为 `"attachment"` 或 `"inline"` |
+| 发件状态 | 同步返回成功/失败，无 webhook 回调（与 Resend 不同） |
+| 收件人上限 | to + cc + bcc 总计不超过 50 |
+
+---
+
+## 原版功能
+
+本项目保留了 [maillab/cloud-mail](https://github.com/maillab/cloud-mail) 的所有原版功能：
+
+- 多域名支持
+- 邮件收发（Cloudflare Email Routing 收件 + Resend 发件）
+- 附件支持（R2/S3/KV 存储）
+- 响应式 Web UI（Vue 3 + Element Plus）
+- 多用户 + RBAC 权限控制
+- Telegram 推送
+- Turnstile 验证码
+- 邮件转发
+- 暗色模式
+- 多语言（中/英）
+
+---
 
 ## 技术栈
 
-- **平台**：[Cloudflare Workers](https://developers.cloudflare.com/workers/)
+| 组件 | 技术 |
+|------|------|
+| 运行环境 | Cloudflare Workers |
+| 后端框架 | Hono.js |
+| 数据库 | Cloudflare D1 (SQLite) + Drizzle ORM |
+| 缓存 | Cloudflare KV |
+| 文件存储 | Cloudflare R2 |
+| 发件 | **Cloudflare Email Service**（主） + Resend（备） |
+| 收件 | Cloudflare Email Routing |
+| 前端 | Vue 3 + Element Plus + Vite |
 
-- **Web框架**：[Hono](https://hono.dev/)
+---
 
-- **ORM：**[Drizzle](https://orm.drizzle.team/)
+## License
 
-- **前端框架**：[Vue3](https://vuejs.org/) 
-
-- **UI框架**：[Element Plus](https://element-plus.org/) 
-
-- **邮件推送：** [Resend](https://resend.com/)
-
-- **缓存**：[Cloudflare KV](https://developers.cloudflare.com/kv/)
-
-- **数据库**：[Cloudflare D1](https://developers.cloudflare.com/d1/)
-
-- **文件存储**：[Cloudflare R2](https://developers.cloudflare.com/r2/)
-
-## 目录结构
-
-```
-cloud-mail
-├── mail-worker				    # worker后端项目
-│   ├── src                  
-│   │   ├── api	 			    # api接口层			
-│   │   ├── const  			    # 项目常量
-│   │   ├── dao                 # 数据访问层
-│   │   ├── email			    # 邮件处理接收
-│   │   ├── entity			    # 数据库实体
-│   │   ├── error			    # 自定义异常
-│   │   ├── hono			    # web框架配置、拦截器、全局异常等
-│   │   ├── i18n			    # 语言国际化
-│   │   ├── init			    # 数据库缓存初始化
-│   │   ├── model			    # 响应体数据封装
-│   │   ├── security			# 身份权限认证
-│   │   ├── service			    # 业务服务层
-│   │   ├── template			# 消息模板
-│   │   ├── utils			    # 工具类
-│   │   └── index.js			# 入口文件
-│   ├── pageckge.json			# 项目依赖
-│   └── wrangler.toml			# 项目配置
-│
-├── mail-vue				    # vue前端项目
-│   ├── src
-│   │   ├── axios 			    # axios配置
-│   │   ├── components			# 自定义组件
-│   │   ├── echarts			    # echarts组件导入
-│   │   ├── i18n			    # 语言国际化
-│   │   ├── init			    # 入站初始化
-│   │   ├── layout			    # 主体布局组件
-│   │   ├── perm			    # 权限认证
-│   │   ├── request			    # api接口
-│   │   ├── router			    # 路由配置
-│   │   ├── store			    # 全局状态管理
-│   │   ├── utils			    # 工具类
-│   │   ├── views			    # 页面组件
-│   │   ├── app.vue			    # 入口组件
-│   │   ├── main.js			    # 入口js
-│   │   └── style.css			# 全局css
-│   ├── package.json			# 项目依赖
-└── └── env.release				# 项目配置
-```
-
-## 赞助
-
-<a href="https://doc.skymail.ink/support.html" >
-<img width="170px" src="./doc/images/support.png" alt="">
-</a>
-
-## 许可证
-
-本项目采用 [MIT](LICENSE) 许可证	
-
-
-## 交流
-
-[Telegram](https://t.me/cloud_mail_tg)
-
-
-
+MIT — 与原项目一致。详见 [LICENSE](LICENSE)。
