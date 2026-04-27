@@ -52,7 +52,42 @@ Generate the API key in admin Settings > External API Key.
 
 Full documentation: [External API Guide](docs/external-api-guide.md)
 
-### 3. Automatic D1 Backup to R2
+### 3. Email Delete + R2 Attachment Cleanup (Web UI + API)
+
+**Web UI**: After selecting emails, the toolbar shows two delete buttons:
+- 🗑️ Soft delete — marks as deleted, recoverable
+- 🗑️ **Permanent delete** — removes email + R2/S3/KV attachments + stars, irreversible (with confirmation dialog)
+
+**External API** also provides delete endpoints:
+
+```bash
+# Soft delete
+curl -X DELETE "https://your-domain.com/api/external/email/123" -H "X-API-Key: KEY"
+
+# Permanent delete (email + R2 attachments + stars)
+curl -X DELETE "https://your-domain.com/api/external/email/123/permanent" -H "X-API-Key: KEY"
+
+# Batch delete
+curl -X POST "https://your-domain.com/api/external/email/batch-delete" \
+  -H "X-API-Key: KEY" -H "Content-Type: application/json" \
+  -d '{"emailIds":[1,2,3],"permanent":true}'
+```
+
+### 4. New User Registration Notification
+
+Automatically sends Telegram + admin email notifications when a new user registers. Uses existing Telegram Bot settings — no extra configuration needed.
+
+### 5. Admin Password Reset
+
+Forgot admin password? Reset via JWT secret:
+
+```bash
+curl -X POST "https://your-domain.com/api/reset-admin/<jwt_secret>" \
+  -H "Content-Type: application/json" \
+  -d '{"password":"newpassword"}'
+```
+
+### 6. Automatic D1 Backup to R2
 
 Built-in Worker cron job exports the entire D1 database as gzipped SQL to R2 daily.
 
