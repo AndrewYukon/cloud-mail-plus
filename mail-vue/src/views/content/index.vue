@@ -3,6 +3,9 @@
     <div class="header-actions">
       <Icon class="icon" icon="material-symbols-light:arrow-back-ios-new" width="20" height="20" @click="handleBack"/>
       <Icon v-perm="'email:delete'" class="icon" icon="uiw:delete" width="16" height="16" @click="handleDelete"/>
+      <el-tooltip :content="$t('exportEml')" placement="top">
+        <Icon class="icon" icon="mdi:download" width="18" height="18" @click="handleExport"/>
+      </el-tooltip>
       <span class="star" v-if="emailStore.contentData.showStar">
         <Icon class="icon" @click="changeStar" v-if="email.isStar" icon="fluent-color:star-16" width="20" height="20"/>
         <Icon class="icon" @click="changeStar" v-else icon="solar:star-line-duotone" width="18" height="18"/>
@@ -78,7 +81,7 @@ import ShadowHtml from '@/components/shadow-html/index.vue'
 import {reactive, ref, watch, onMounted, onUnmounted} from "vue";
 import {useRouter} from 'vue-router'
 import {ElMessage, ElMessageBox} from 'element-plus'
-import {emailDelete, emailRead} from "@/request/email.js";
+import {emailDelete, emailRead, emailExport} from "@/request/email.js";
 import {Icon} from "@iconify/vue";
 import {useEmailStore} from "@/store/email.js";
 import {useAccountStore} from "@/store/account.js";
@@ -181,6 +184,21 @@ function changeStar() {
 
 const handleBack = () => {
   router.back()
+}
+
+const handleExport = () => {
+  emailExport(email.emailId).then(res => {
+    const blob = new Blob([res.data || res], { type: 'message/rfc822' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `email-${email.emailId}.eml`
+    a.click()
+    URL.revokeObjectURL(url)
+    ElMessage({ message: t('exportSuccess'), type: 'success', plain: true })
+  }).catch(() => {
+    ElMessage({ message: t('exportFailed'), type: 'error', plain: true })
+  })
 }
 
 const handleDelete = () => {

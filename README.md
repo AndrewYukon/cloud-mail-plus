@@ -79,7 +79,21 @@ curl -X POST "https://your-domain.com/api/external/email/batch-delete" \
   -d '{"emailIds":[1,2,3],"permanent":true}'
 ```
 
-### 4. 新用户注册通知
+### 4. 邮件导出为 .eml 文件（Web UI + API）
+
+支持将邮件导出为标准 `.eml` 格式（RFC 5322），可在 Outlook/Thunderbird 等任意邮件客户端中打开。
+
+**Web UI**：打开邮件详情 → 点击下载图标 📥 → 自动下载 `.eml` 文件。
+
+**External API**：
+```bash
+curl "https://your-domain.com/api/external/email/9/export" \
+  -H "X-API-Key: KEY" -o email-9.eml
+```
+
+导出内容包含：邮件头（From/To/Subject/Date）、HTML + 纯文本正文、内嵌图片（CID）、附件。
+
+### 5. 新用户注册通知
 
 新用户注册时自动发送通知到 Telegram Bot 和管理员邮箱（通过 CF Email Service）。无需额外配置 — 使用已有的 Telegram Bot 设置。
 
@@ -93,7 +107,7 @@ curl -X POST "https://your-domain.com/api/reset-admin/<jwt_secret>" \
   -d '{"password":"newpassword"}'
 ```
 
-### 6. D1 自动备份到 R2
+### 7. D1 自动备份到 R2
 
 Worker 内置 cron 定时任务，每天自动导出 D1 全量数据为 SQL 并 gzip 压缩上传到 R2。
 

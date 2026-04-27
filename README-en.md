@@ -73,7 +73,21 @@ curl -X POST "https://your-domain.com/api/external/email/batch-delete" \
   -d '{"emailIds":[1,2,3],"permanent":true}'
 ```
 
-### 4. New User Registration Notification
+### 4. Email Export as .eml (Web UI + API)
+
+Export emails as standard `.eml` files (RFC 5322), compatible with any email client (Outlook, Thunderbird, Apple Mail, etc.).
+
+**Web UI**: Open email → click download icon 📥 → `.eml` file downloads automatically.
+
+**External API**:
+```bash
+curl "https://your-domain.com/api/external/email/9/export" \
+  -H "X-API-Key: KEY" -o email-9.eml
+```
+
+Includes: headers, HTML + plain text body, inline images (CID), attachments.
+
+### 5. New User Registration Notification
 
 Automatically sends Telegram + admin email notifications when a new user registers. Uses existing Telegram Bot settings — no extra configuration needed.
 
@@ -87,7 +101,17 @@ curl -X POST "https://your-domain.com/api/reset-admin/<jwt_secret>" \
   -d '{"password":"newpassword"}'
 ```
 
-### 6. Automatic D1 Backup to R2
+### 6. Admin Password Reset
+
+Forgot admin password? Reset via JWT secret:
+
+```bash
+curl -X POST "https://your-domain.com/api/reset-admin/<jwt_secret>" \
+  -H "Content-Type: application/json" \
+  -d '{"password":"newpassword"}'
+```
+
+### 7. Automatic D1 Backup to R2
 
 Built-in Worker cron job exports the entire D1 database as gzipped SQL to R2 daily.
 

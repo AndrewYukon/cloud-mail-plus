@@ -12,6 +12,10 @@ export function emailPermanentDelete(emailIds) {
     return http.delete('/email/permanentDelete?emailIds=' + emailIds)
 }
 
+export function emailExport(emailId) {
+    return http.get('/email/export', {params: {emailId}, responseType: 'blob'})
+}
+
 export function emailLatest(emailId, accountId, allReceive) {
     return http.get('/email/latest', {params: {emailId, accountId, allReceive}, noMsg: true, timeout: 35 * 1000})
 }

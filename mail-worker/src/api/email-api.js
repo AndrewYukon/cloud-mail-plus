@@ -4,6 +4,7 @@ import result from '../model/result';
 import userContext from '../security/user-context';
 import attService from '../service/att-service';
 import starService from '../service/star-service';
+import emlService from '../service/eml-service';
 import orm from '../entity/orm';
 import email from '../entity/email';
 import { eq, and, inArray } from 'drizzle-orm';
@@ -60,5 +61,29 @@ app.post('/email/send', async (c) => {
 app.put('/email/read', async (c) => {
 	await emailService.read(c, await c.req.json(), userContext.getUserId(c));
 	return c.json(result.ok());
+})
+
+// Export email as .eml file (#323)
+app.get('/email/export', async (c) => {
+	const userId = userContext.getUserId(c);
+	const emailId = Number(c.req.query('emailId'));
+	if (!emailId || isNaN(emailId)) {
+		return c.json(result.fail('Invalid emailId'));
+	}
+
+	// Verify ownership
+	const emailRow = await orm(c).select().from(email)
+		.where(and(eq(email.emailId, emailId), eq(email.userId, userId))).get();
+	if (!emailRow) {
+		return c.json(result.fail('Email not found'));
+	}
+
+	const eml = await emlService.buildEml(c, emailId);
+	return new Response(eml, {
+		headers: {
+			'Content-Type': 'message/rfc822',
+			'Content-Disposition': `attachment; filename="email-${emailId}.eml"`,
+		},
+	});
 })
 

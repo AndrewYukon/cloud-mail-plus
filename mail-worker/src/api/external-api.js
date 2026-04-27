@@ -6,11 +6,13 @@ import cfEmailService from '../service/cf-email-service';
 import emailService from '../service/email-service';
 import attService from '../service/att-service';
 import starService from '../service/star-service';
+import emlService from '../service/eml-service';
 import { Resend } from 'resend';
 import { emailConst, settingConst, isDel } from '../const/entity-const';
 import emailUtils from '../utils/email-utils';
 import orm from '../entity/orm';
 import email from '../entity/email';
+import { att } from '../entity/att';
 import { eq, inArray } from 'drizzle-orm';
 
 /**
@@ -184,6 +186,24 @@ app.get('/external/status/:emailId', async (c) => {
 		message: emailRow.message,
 		createTime: emailRow.createTime,
 	}));
+});
+
+// --- Export email as .eml (#323) ---
+app.get('/external/email/:emailId/export', async (c) => {
+	await verifyApiKey(c);
+
+	const emailId = Number(c.req.param('emailId'));
+	if (!emailId || isNaN(emailId)) {
+		throw new BizError('Invalid emailId');
+	}
+
+	const eml = await emlService.buildEml(c, emailId);
+	return new Response(eml, {
+		headers: {
+			'Content-Type': 'message/rfc822',
+			'Content-Disposition': `attachment; filename="email-${emailId}.eml"`,
+		},
+	});
 });
 
 // --- Delete email (soft delete) ---
