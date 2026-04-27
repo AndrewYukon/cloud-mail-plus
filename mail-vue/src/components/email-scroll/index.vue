@@ -15,6 +15,11 @@
         <Icon v-perm="'email:delete'" class="icon delete" icon="uiw:delete" width="16" height="16"
               v-if="getSelectedMailsIds().length > 0"
               @click="handleDelete"/>
+        <el-tooltip :content="$t('permanentDelete')" placement="top">
+          <Icon v-perm="'email:delete'" class="icon delete" icon="mdi:delete-forever" width="18" height="18"
+                v-if="getSelectedMailsIds().length > 0"
+                @click="handlePermanentDelete"/>
+        </el-tooltip>
         <Icon v-perm="'email:delete'" class="icon delete" icon="fluent:mail-read-20-regular" width="21" height="21"
               v-if="getSelectedMailsIds().length > 0 && showUnread"
               @click="handleRead"/>
@@ -239,6 +244,7 @@ import { useScroll } from '@vueuse/core'
 const props = defineProps({
   getEmailList: Function,
   emailDelete: Function,
+  emailPermanentDelete: Function,
   emailRead: Function,
   starAdd: Function,
   starCancel: Function,
@@ -671,6 +677,25 @@ function handleDelete() {
 
     const emailIds = getSelectedMailsIds();
     props.emailDelete(emailIds).then(() => {
+      ElMessage({
+        message: t('delSuccessMsg'),
+        type: 'success',
+        plain: true
+      })
+      emailStore.deleteIds = emailIds;
+    })
+  })
+}
+
+function handlePermanentDelete() {
+  if (!props.emailPermanentDelete) return
+  ElMessageBox.confirm(t('permanentDeleteConfirm'), {
+    confirmButtonText: t('confirm'),
+    cancelButtonText: t('cancel'),
+    type: 'error'
+  }).then(() => {
+    const emailIds = getSelectedMailsIds();
+    props.emailPermanentDelete(emailIds).then(() => {
       ElMessage({
         message: t('delSuccessMsg'),
         type: 'success',

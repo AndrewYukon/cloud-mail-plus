@@ -4,6 +4,7 @@
                :star-success="addStar"
                :getEmailList="getEmailList"
                :emailDelete="emailDelete"
+               :emailPermanentDelete="emailPermanentDelete"
                :star-add="starAdd"
                :star-cancel="starCancel"
                :time-sort="params.timeSort"
@@ -27,7 +28,7 @@ import {useAccountStore} from "@/store/account.js";
 import {useEmailStore} from "@/store/email.js";
 import {useSettingStore} from "@/store/setting.js";
 import emailScroll from "@/components/email-scroll/index.vue"
-import {emailList, emailDelete, emailLatest, emailRead} from "@/request/email.js";
+import {emailList, emailDelete, emailPermanentDelete, emailLatest, emailRead} from "@/request/email.js";
 import {starAdd, starCancel} from "@/request/star.js";
 import {defineOptions, h, onMounted, reactive, ref, watch} from "vue";
 import {sleep} from "@/utils/time-utils.js";

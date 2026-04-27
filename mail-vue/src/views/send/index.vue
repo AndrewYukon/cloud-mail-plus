@@ -4,6 +4,7 @@
                :star-success="addStar"
                :getEmailList="getEmailList"
                :emailDelete="emailDelete"
+               :emailPermanentDelete="emailPermanentDelete"
                :star-add="starAdd"
                show-status
                actionLeft="4px"
@@ -25,7 +26,7 @@
 import {useAccountStore} from "@/store/account.js";
 import {useEmailStore} from "@/store/email.js";
 import emailScroll from "@/components/email-scroll/index.vue"
-import {emailList, emailDelete} from "@/request/email.js";
+import {emailList, emailDelete, emailPermanentDelete} from "@/request/email.js";
 import {starAdd, starCancel} from "@/request/star.js";
 import {defineOptions, onMounted, reactive, ref, watch} from "vue";
 import router from "@/router/index.js";

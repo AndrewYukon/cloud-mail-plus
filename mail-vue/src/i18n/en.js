@@ -246,6 +246,8 @@ const en = {
     sendFailMsg: 'Send failed',
     saveDraftConfirm: 'Save draft?',
     delEmailsConfirm: 'Confirm deletion of selected emails?',
+    permanentDelete: 'Permanent Delete (including attachments)',
+    permanentDeleteConfirm: 'Permanently delete selected emails and their attachments? This cannot be undone.',
     delOneEmailConfirm: 'Confirm deletion of this email?',
     sending: 'Sending email...',
     sendingErrorMsg: 'Sending in progress',

@@ -246,6 +246,8 @@ const zh = {
     sendFailMsg: '发送失败',
     saveDraftConfirm: '是否保存草稿？',
     delEmailsConfirm: '确认删除选中的邮件吗？',
+    permanentDelete: '永久删除（含附件）',
+    permanentDeleteConfirm: '永久删除选中的邮件及其附件？此操作不可恢复。',
     delOneEmailConfirm: '确认删除这个邮件吗？',
     sending: '邮件正在发送中',
     sendingErrorMsg: '邮件正在发送中',
