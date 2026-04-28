@@ -248,6 +248,7 @@ const en = {
     delEmailsConfirm: 'Confirm deletion of selected emails?',
     permanentDelete: 'Permanent Delete (including attachments)',
     permanentDeleteConfirm: 'Permanently delete selected emails and their attachments? This cannot be undone.',
+    buyMeCoffee: 'Buy me a coffee',
     exportEml: 'Export as .eml file',
     exportSuccess: 'Email exported successfully',
     exportFailed: 'Export failed',

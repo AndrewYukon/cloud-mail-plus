@@ -402,6 +402,12 @@
                       <Icon icon="codicon:github-inverted" width="22" height="22"/>
                     </template>
                   </el-button>
+                  <el-button @click="jump('https://github.com/AndrewYukon/cloud-mail-plus/blob/main/doc/demo/Buy-me-a-coffee-WeChat.JPG')">
+                    {{ $t('buyMeCoffee') }}
+                    <template #icon>
+                      <Icon color="#79D6B5" icon="simple-icons:buymeacoffee" width="20" height="20"/>
+                    </template>
+                  </el-button>
                 </div>
               </div>
               <div class="concerning-item">

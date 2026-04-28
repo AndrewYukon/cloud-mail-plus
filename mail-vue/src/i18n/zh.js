@@ -248,6 +248,7 @@ const zh = {
     delEmailsConfirm: '确认删除选中的邮件吗？',
     permanentDelete: '永久删除（含附件）',
     permanentDeleteConfirm: '永久删除选中的邮件及其附件？此操作不可恢复。',
+    buyMeCoffee: '请我喝杯咖啡',
     exportEml: '导出为 .eml 文件',
     exportSuccess: '邮件导出成功',
     exportFailed: '导出失败',
