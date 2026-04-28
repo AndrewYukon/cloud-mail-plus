@@ -16,6 +16,9 @@
       <div v-else class="dark-icon icon-item" @click="openDark($event)">
         <Icon icon="solar:moon-linear"/>
       </div>
+      <div class="icon-item" @click="changeLang(settingStore.lang === 'en' ? 'zh' : 'en')" :title="settingStore.lang === 'en' ? '切换中文' : 'Switch to English'" style="cursor:pointer;font-size:13px;font-weight:600;opacity:0.75;">
+        {{ settingStore.lang === 'en' ? '中' : 'EN' }}
+      </div>
       <div class="notice icon-item" @click="openNotice">
         <Icon icon="streamline-plump:announcement-megaphone"/>
       </div>
