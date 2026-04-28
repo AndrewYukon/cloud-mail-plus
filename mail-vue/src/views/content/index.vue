@@ -187,8 +187,7 @@ const handleBack = () => {
 }
 
 const handleExport = () => {
-  emailExport(email.emailId).then(res => {
-    const blob = new Blob([res.data || res], { type: 'message/rfc822' })
+  emailExport(email.emailId).then(blob => {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url

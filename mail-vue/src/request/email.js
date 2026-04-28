@@ -13,7 +13,23 @@ export function emailPermanentDelete(emailIds) {
 }
 
 export function emailExport(emailId) {
-    return http.get('/email/export', {params: {emailId}, responseType: 'blob'})
+    const token = localStorage.getItem('token')
+    return fetch(`${import.meta.env.VITE_BASE_URL}/email/export?emailId=${emailId}`, {
+        headers: { 'Authorization': token }
+    }).then(r => {
+        if (!r.ok) throw new Error('Export failed')
+        return r.blob()
+    })
+}
+
+export function emailBatchExport(emailIds) {
+    const token = localStorage.getItem('token')
+    return fetch(`${import.meta.env.VITE_BASE_URL}/email/batchExport?emailIds=${emailIds}`, {
+        headers: { 'Authorization': token }
+    }).then(r => {
+        if (!r.ok) throw new Error('Export failed')
+        return r.blob()
+    })
 }
 
 export function emailLatest(emailId, accountId, allReceive) {
