@@ -16,7 +16,9 @@ set -euo pipefail
 #   8. Saves state to .cloud-mail-deploy.env so re-runs skip prompts
 #
 # Usage:
-#   bash scripts/deploy.sh                # interactive
+#   bash scripts/deploy.sh                # interactive (prompts for AI agent too)
+#   bash scripts/deploy.sh --with-ai      # auto-enable AI Email Agent (non-interactive)
+#   bash scripts/deploy.sh --no-ai        # auto-disable AI Email Agent (non-interactive)
 #   bash scripts/deploy.sh --redeploy     # skip resource creation, just rebuild + ship
 #   bash scripts/deploy.sh --reset        # forget saved state, start fresh
 #   bash scripts/deploy.sh --destroy      # tear down D1/KV/R2 + delete Worker (DANGEROUS)
@@ -24,6 +26,11 @@ set -euo pipefail
 #
 # Re-runs are safe: existing D1/KV/R2 resources are detected and reused.
 # --destroy is irreversible: D1 data, KV pairs, R2 objects are permanently deleted.
+#
+# AI Email Agent: uses Cloudflare Workers AI (@cf/moonshotai/kimi-k2.5) +
+# Durable Objects (EmailAgent class). Auto-enables both bindings, the DO
+# migration, and runs /api/init to create the agent_message table + add
+# agent_* columns. Per-user opt-in via Settings → AI Email Agent in the UI.
 # =============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -35,13 +42,16 @@ STATE_FILE="$REPO_ROOT/.cloud-mail-deploy.env"
 REDEPLOY=false
 DESTROY=false
 ASSUME_YES=false
+FORCE_AI=""   # "" = ask, "true" = enable, "false" = disable
 for arg in "$@"; do
   case "$arg" in
     --redeploy)      REDEPLOY=true ;;
     --destroy)       DESTROY=true ;;
     --yes|-y)        ASSUME_YES=true ;;
+    --with-ai)       FORCE_AI="true" ;;
+    --no-ai)         FORCE_AI="false" ;;
     --reset)         rm -f "$STATE_FILE"; echo "State file removed."; exit 0 ;;
-    -h|--help)       sed -n '4,25p' "$0"; exit 0 ;;
+    -h|--help)       sed -n '4,32p' "$0"; exit 0 ;;
     *) echo "Unknown arg: $arg" >&2; exit 1 ;;
   esac
 done
@@ -97,6 +107,7 @@ save_state() {
 DOMAINS="${DOMAINS:-}"
 ADMIN="${ADMIN:-}"
 USE_CF_EMAIL="${USE_CF_EMAIL:-}"
+USE_AI="${USE_AI:-}"
 JWT_SECRET="${JWT_SECRET:-}"
 D1_NAME="${D1_NAME:-}"
 D1_ID="${D1_ID:-}"
@@ -126,6 +137,19 @@ prompt_inputs() {
     read -rp "  Enable Cloudflare Email Service for outbound (recommended) [Y/n]: " ans
     if [[ "${ans:-y}" =~ ^[Yy]$ ]]; then USE_CF_EMAIL="true"; else USE_CF_EMAIL="false"; fi
   fi
+
+  # AI Email Agent (Workers AI + Durable Objects). CLI flags override saved state.
+  if [ -n "$FORCE_AI" ]; then
+    USE_AI="$FORCE_AI"
+  elif [ -z "${USE_AI:-}" ]; then
+    if [ -d "$WORKER_DIR/src/agent" ]; then
+      read -rp "  Enable AI Email Agent (Workers AI kimi-k2.5 + auto-draft)? [Y/n]: " ans
+      if [[ "${ans:-y}" =~ ^[Yy]$ ]]; then USE_AI="true"; else USE_AI="false"; fi
+    else
+      USE_AI="false"
+    fi
+  fi
+  ok "AI Email Agent: $USE_AI"
 
   D1_NAME="${D1_NAME:-cloud-mail}"
   KV_NAME="${KV_NAME:-cloud-mail-kv}"
@@ -205,9 +229,9 @@ ensure_r2() {
 # --- TOML patch (managed block — re-runs replace, never duplicate) ---
 patch_toml() {
   step "5/7" "Patching wrangler.toml with bindings + vars..."
-  python3 - "$WRANGLER_TOML" "$D1_NAME" "$D1_ID" "$KV_ID" "$R2_BUCKET" "$DOMAINS" "$ADMIN" "$JWT_SECRET" "$USE_CF_EMAIL" <<'PYEOF'
+  python3 - "$WRANGLER_TOML" "$D1_NAME" "$D1_ID" "$KV_ID" "$R2_BUCKET" "$DOMAINS" "$ADMIN" "$JWT_SECRET" "$USE_CF_EMAIL" "$USE_AI" <<'PYEOF'
 import re, sys, json
-toml_path, d1_name, d1_id, kv_id, r2_bucket, domains_csv, admin, jwt, use_cf = sys.argv[1:10]
+toml_path, d1_name, d1_id, kv_id, r2_bucket, domains_csv, admin, jwt, use_cf, use_ai = sys.argv[1:11]
 text = open(toml_path).read()
 
 start = "# >>> cloud-mail-deploy >>>"
@@ -215,7 +239,6 @@ end   = "# <<< cloud-mail-deploy <<<"
 text = re.sub(re.escape(start) + r".*?" + re.escape(end) + r"\n?", "", text, flags=re.S)
 
 domains = [d.strip() for d in domains_csv.split(",") if d.strip()]
-domains_toml = json.dumps(json.dumps(domains))[1:-1]  # 'json.dumps' twice → escaped string
 
 block = [
   start,
@@ -235,6 +258,22 @@ block = [
 ]
 if use_cf == "true":
   block += ['[[send_email]]', 'name = "EMAIL"', '']
+
+if use_ai == "true":
+  block += [
+    '# AI Email Agent — Workers AI + EmailAgent Durable Object',
+    '[ai]',
+    'binding = "AI"',
+    '',
+    '[[durable_objects.bindings]]',
+    'name = "EMAIL_AGENT"',
+    'class_name = "EmailAgent"',
+    '',
+    '[[migrations]]',
+    'tag = "v1-add-email-agent"',
+    'new_sqlite_classes = ["EmailAgent"]',
+    '',
+  ]
 
 block += [
   '[vars]',
@@ -303,11 +342,14 @@ print_summary() {
   Admin email:    $ADMIN
   Domains:        $DOMAINS
   CF Email Send:  $USE_CF_EMAIL
+  AI Agent:       ${USE_AI:-false}
 
   Resources:
     D1:    $D1_NAME ($D1_ID)
     KV:    $KV_NAME ($KV_ID)
     R2:    $R2_BUCKET
+$([ "${USE_AI:-false}" = "true" ] && echo "    AI:    [ai] binding bound to Workers AI"
+   [ "${USE_AI:-false}" = "true" ] && echo "    DO:    EmailAgent (one Durable Object instance per user)")
 
   State saved to: $STATE_FILE  (gitignored — contains JWT secret)
 
@@ -316,12 +358,22 @@ print_summary() {
     2. Cloudflare Dashboard → Email → Email Routing
        Add catch-all rule for each domain → cloud-mail Worker
 $([ "$USE_CF_EMAIL" = "true" ] && echo "    3. Cloudflare Dashboard → Email → Email Sending — onboard each domain")
+$([ "${USE_AI:-false}" = "true" ] && echo "    4. Settings → AI Email Agent → enable + (optionally) auto-draft replies")
 
   Re-deploy after code changes:
     bash scripts/deploy.sh --redeploy
 
   Manual D1 backup:
     curl -X POST "$WORKER_URL/api/backup/<jwt_secret>"
+$([ "${USE_AI:-false}" = "true" ] && cat <<AISECTION
+
+  AI Email Agent endpoints (require auth token in Authorization header):
+    POST $WORKER_URL/api/agent/chat          — chat with the agent (SSE stream)
+    PUT  $WORKER_URL/api/agent/settings      — toggle agent + auto-draft + persona
+    POST $WORKER_URL/api/agent/clear         — clear chat history
+    POST $WORKER_URL/api/agent/confirm       — confirm send/delete after tool-call
+AISECTION
+)
 
 EOF
 }

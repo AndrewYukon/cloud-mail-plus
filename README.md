@@ -141,15 +141,18 @@ bash scripts/deploy.sh
 - 检查 wrangler 登录状态（未登录会启动 `wrangler login`）
 - 幂等创建 D1 / KV / R2（已存在则复用，不会重复创建）
 - 生成 64 字符 JWT secret
+- **可选启用 AI Email Agent**（Workers AI kimi-k2.5 + 自动起草） — 自动写入 `[ai]` binding、`EmailAgent` Durable Object、DO migration、agent schema
 - 在 `wrangler.toml` 的标记块内写入 bindings + vars（重跑替换不重复）
 - `wrangler deploy`（自动构建 Vue 前端）
-- 调用 `/api/init/<jwt_secret>` 初始化 D1 schema
+- 调用 `/api/init/<jwt_secret>` 初始化 D1 schema（含 agent 表）
 - 状态保存在 `.cloud-mail-deploy.env`（已 gitignore，含 JWT secret）
 
 **子命令：**
 
 ```bash
-bash scripts/deploy.sh                  # 交互式首次部署
+bash scripts/deploy.sh                  # 交互式首次部署（会询问是否启用 AI Agent）
+bash scripts/deploy.sh --with-ai        # 自动启用 AI Email Agent（非交互）
+bash scripts/deploy.sh --no-ai          # 自动禁用 AI Email Agent（非交互）
 bash scripts/deploy.sh --redeploy       # 仅重建+部署，跳过资源创建
 bash scripts/deploy.sh --reset          # 清除本地状态文件，重新来
 bash scripts/deploy.sh --destroy        # 拆除 Worker + D1 + KV + R2（不可逆）
@@ -157,6 +160,19 @@ bash scripts/deploy.sh --destroy --yes  # 跳过确认（CI/自动化）
 ```
 
 > `--destroy` 会永久删除邮箱数据、附件、备份。请谨慎使用，建议先 `wrangler r2 object` 备份重要数据。
+
+**AI Email Agent 一键启用：**
+
+```bash
+bash scripts/deploy.sh --with-ai
+# 部署后访问 Web UI → 设置 → AI Email Agent → 打开「启用 AI agent」+「自动起草」
+```
+
+启用后包含的功能：
+- 9 个邮件工具（list / search / get / read attachment / summarize / draft reply / draft new / send / delete）
+- 收到新邮件时自动生成回复草稿（不会自动发送，永远需要用户确认）
+- 每用户独立 Durable Object 实例（聊天历史隔离）
+- 模型：`@cf/moonshotai/kimi-k2.5`
 
 ### 手动部署（步骤分解）
 
