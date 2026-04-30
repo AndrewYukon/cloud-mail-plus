@@ -129,9 +129,42 @@ Built-in Worker cron job exports the entire D1 database as gzipped SQL to R2 dai
 
 - [Cloudflare](https://dash.cloudflare.com) account
 - [Node.js](https://nodejs.org/) 16.17+
+- [pnpm](https://pnpm.io/) 8+ (recommended) or npm
+- `jq`, `python3`, `openssl`, `curl` (required by the one-click script)
 - Domain added to Cloudflare DNS
 
-### Steps
+### One-Click Deploy (Recommended)
+
+```bash
+git clone https://github.com/AndrewYukon/cloud-mail-plus.git
+cd cloud-mail-plus
+bash scripts/deploy.sh
+```
+
+The script handles:
+- Wrangler login check (launches `wrangler login` if needed)
+- Idempotent D1 / KV / R2 creation (existing resources are reused, not duplicated)
+- 64-char JWT secret generation
+- `wrangler.toml` patching inside markers (re-runs replace, never duplicate)
+- `wrangler deploy` (auto-builds the Vue frontend)
+- D1 schema init via `/api/init/<jwt_secret>`
+- State saved to `.cloud-mail-deploy.env` (gitignored, contains the JWT secret)
+
+**Subcommands:**
+
+```bash
+bash scripts/deploy.sh                  # interactive first-time deploy
+bash scripts/deploy.sh --redeploy       # rebuild + ship only, skip resource creation
+bash scripts/deploy.sh --reset          # clear local state file, start over
+bash scripts/deploy.sh --destroy        # tear down Worker + D1 + KV + R2 (irreversible)
+bash scripts/deploy.sh --destroy --yes  # skip confirmations (CI / scripting)
+```
+
+> `--destroy` permanently deletes mailbox data, attachments, and backups. Back up critical data via `wrangler r2 object` before running.
+
+### Manual Deploy (Step-by-Step)
+
+For finer control (custom domain, sharing an existing D1, etc.), follow the manual steps below.
 
 1. **Clone**
 

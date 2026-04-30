@@ -125,9 +125,42 @@ Worker 内置 cron 定时任务，每天自动导出 D1 全量数据为 SQL 并 
 
 - [Cloudflare](https://dash.cloudflare.com) 账号
 - [Node.js](https://nodejs.org/) 16.17+
+- [pnpm](https://pnpm.io/) 8+（推荐）或 npm
+- `jq`、`python3`、`openssl`、`curl`（一键脚本依赖）
 - 域名已添加到 Cloudflare DNS
 
-### 步骤
+### 一键部署（推荐）
+
+```bash
+git clone https://github.com/AndrewYukon/cloud-mail-plus.git
+cd cloud-mail-plus
+bash scripts/deploy.sh
+```
+
+脚本会自动完成：
+- 检查 wrangler 登录状态（未登录会启动 `wrangler login`）
+- 幂等创建 D1 / KV / R2（已存在则复用，不会重复创建）
+- 生成 64 字符 JWT secret
+- 在 `wrangler.toml` 的标记块内写入 bindings + vars（重跑替换不重复）
+- `wrangler deploy`（自动构建 Vue 前端）
+- 调用 `/api/init/<jwt_secret>` 初始化 D1 schema
+- 状态保存在 `.cloud-mail-deploy.env`（已 gitignore，含 JWT secret）
+
+**子命令：**
+
+```bash
+bash scripts/deploy.sh                  # 交互式首次部署
+bash scripts/deploy.sh --redeploy       # 仅重建+部署，跳过资源创建
+bash scripts/deploy.sh --reset          # 清除本地状态文件，重新来
+bash scripts/deploy.sh --destroy        # 拆除 Worker + D1 + KV + R2（不可逆）
+bash scripts/deploy.sh --destroy --yes  # 跳过确认（CI/自动化）
+```
+
+> `--destroy` 会永久删除邮箱数据、附件、备份。请谨慎使用，建议先 `wrangler r2 object` 备份重要数据。
+
+### 手动部署（步骤分解）
+
+如果你需要更细的控制（例如自定义域名、共享已有 D1），可以按以下步骤手动操作。
 
 1. **克隆仓库**
 
