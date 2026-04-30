@@ -131,6 +131,11 @@ export async function email(message, env, ctx) {
 
 		emailRow = await emailService.completeReceive({ env }, account ? emailConst.status.RECEIVE : emailConst.status.NOONE, emailRow.emailId);
 
+		// AI auto-draft hook (no-op if user has agent.autoDraft disabled or bindings missing)
+		try {
+			const { maybeAutoDraft } = await import('../agent/auto-draft.js');
+			await maybeAutoDraft({ env, executionCtx: { waitUntil: (p) => p } }, { emailId: emailRow.emailId, userId: emailRow.userId });
+		} catch (err) { console.error('[auto-draft hook]', err); }
 
 		if (ruleType === settingConst.ruleType.RULE) {
 

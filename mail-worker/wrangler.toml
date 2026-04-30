@@ -32,6 +32,20 @@ crons = ["0 16 * * *"]	# Daily housekeeping at 16:00 UTC
 #[[send_email]]
 #name = "EMAIL"
 
+# --- AI Email Agent (optional, requires Workers AI access) ---
+# Uncomment to enable the AIChatAgent side panel + auto-draft on inbound email.
+# Model: @cf/moonshotai/kimi-k2.5
+#[ai]
+#binding = "AI"
+
+#[[durable_objects.bindings]]
+#name = "EMAIL_AGENT"
+#class_name = "EmailAgent"
+
+#[[migrations]]
+#tag = "v1-add-email-agent"
+#new_sqlite_classes = ["EmailAgent"]
+
 #[vars]
 #orm_log = false
 #domain = '["example.com"]'	# Your email domains (array)

@@ -835,6 +835,54 @@ const emailService = {
 	async read(c, params, userId) {
 		const { emailIds } = params;
 		await orm(c).update(email).set({ unread: emailConst.unread.READ }).where(and(eq(email.userId, userId), inArray(email.emailId, emailIds)));
+	},
+
+	// --- AI agent helpers (draft + send + delete primitives) ---
+	async detail(c, emailId, userId) {
+		return orm(c).select().from(email)
+			.where(and(eq(email.emailId, emailId), eq(email.userId, userId), eq(email.isDel, isDel.NORMAL)))
+			.get();
+	},
+
+	async saveDraft(c, fields) {
+		const row = {
+			userId: fields.userId,
+			accountId: fields.accountId || 0,
+			sendEmail: '',
+			toEmail: fields.toEmail || '',
+			subject: fields.subject || '',
+			content: fields.content || '',
+			text: fields.text || '',
+			inReplyTo: fields.inReplyTo || '',
+			relation: fields.relation || '',
+			messageId: fields.messageId || '',
+			type: emailConst.type.SEND,
+			status: emailConst.status.SAVING,
+			aiMetadata: fields.aiMetadata || '',
+			isDel: isDel.NORMAL,
+		};
+		const [inserted] = await orm(c).insert(email).values(row).returning({ emailId: email.emailId });
+		return inserted.emailId;
+	},
+
+	async markSent(c, emailId, userId, sendResult) {
+		await orm(c).update(email).set({
+			status: emailConst.status.SENT,
+			messageId: sendResult?.messageId || '',
+		}).where(and(eq(email.emailId, emailId), eq(email.userId, userId))).run();
+	},
+
+	async softDelete(c, emailId, userId) {
+		await orm(c).update(email).set({ isDel: isDel.DELETE })
+			.where(and(eq(email.emailId, emailId), eq(email.userId, userId)))
+			.run();
+	},
+
+	async permanentDelete(c, emailId, userId) {
+		await attService.removeByEmailIds(c, [emailId]);
+		await orm(c).delete(email)
+			.where(and(eq(email.emailId, emailId), eq(email.userId, userId)))
+			.run();
 	}
 };
 

@@ -19,6 +19,7 @@
     </el-container>
   </el-container>
   <writer ref="writerRef" />
+  <AgentSidePanel :visible="agentStore.panelVisible" @close="agentStore.panelVisible = false" />
 </template>
 
 <script setup>
@@ -27,9 +28,12 @@ import Header from '@/layout/header/index.vue'
 import Main from '@/layout/main/index.vue'
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import {useUiStore} from "@/store/ui.js";
+import {useAgentStore} from "@/store/agent.js";
 import writer from '@/layout/write/index.vue'
+import AgentSidePanel from '@/components/agent/AgentSidePanel.vue'
 
 const uiStore = useUiStore();
+const agentStore = useAgentStore();
 const writerRef = ref({})
 const isMobile = ref(window.innerWidth < 1025)
 const handleResize = () => {

@@ -357,6 +357,7 @@ const dbInit = {
 
 		await this.receiveEmailToRecipient(c);
 		await this.initAccountName(c);
+		await this.initAgentColumns(c);
 
 		try {
 			await c.env.db.prepare(`
@@ -655,6 +656,30 @@ const dbInit = {
 		})
 
 		await c.env.db.batch(queryList);
+	},
+
+	async initAgentColumns(c) {
+		const existing = await c.env.db.prepare(
+			`SELECT name FROM pragma_table_info('user') WHERE name = 'agent_enabled' LIMIT 1`
+		).first();
+		if (existing) return;
+
+		await c.env.db.batch([
+			c.env.db.prepare(`ALTER TABLE user ADD COLUMN agent_enabled INTEGER NOT NULL DEFAULT 0`),
+			c.env.db.prepare(`ALTER TABLE user ADD COLUMN agent_auto_draft INTEGER NOT NULL DEFAULT 0`),
+			c.env.db.prepare(`ALTER TABLE user ADD COLUMN agent_persona TEXT NOT NULL DEFAULT ''`),
+			c.env.db.prepare(`ALTER TABLE email ADD COLUMN ai_metadata TEXT NOT NULL DEFAULT ''`),
+			c.env.db.prepare(`
+				CREATE TABLE IF NOT EXISTS agent_message (
+					id INTEGER PRIMARY KEY AUTOINCREMENT,
+					user_id INTEGER NOT NULL,
+					role TEXT NOT NULL,
+					parts TEXT NOT NULL,
+					create_time TEXT DEFAULT CURRENT_TIMESTAMP
+				)
+			`),
+			c.env.db.prepare(`CREATE INDEX IF NOT EXISTS idx_agent_message_user ON agent_message(user_id, id)`),
+		]);
 	}
 };
 export { dbInit };

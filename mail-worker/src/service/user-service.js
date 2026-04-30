@@ -373,6 +373,19 @@ const userService = {
 			.where(eq(user.regKeyId, regKeyId))
 			.orderBy(desc(user.userId))
 			.all();
+	},
+
+	async findById(c, userId) {
+		return orm(c).select().from(user)
+			.where(and(eq(user.userId, userId), eq(user.isDel, isDel.NORMAL)))
+			.get();
+	},
+
+	async updateAgentSettings(c, userId, { agentEnabled, agentAutoDraft, agentPersona }) {
+		await orm(c).update(user)
+			.set({ agentEnabled, agentAutoDraft, agentPersona })
+			.where(eq(user.userId, userId))
+			.run();
 	}
 };
 

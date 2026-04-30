@@ -258,6 +258,28 @@ const attService = {
 			return []
 		}
 		return orm(c).select().from(att).where(inArray(att.key, keys)).orderBy(desc(att.attId)).groupBy(att.key).all();
+	},
+
+	// --- AI agent helpers ---
+	async getOne(c, emailId, attIndex, userId) {
+		const rows = await orm(c).select().from(att)
+			.where(and(eq(att.emailId, emailId), eq(att.userId, userId)))
+			.orderBy(att.attId)
+			.all();
+		return rows[attIndex] || null;
+	},
+
+	async fetchBytes(c, attRow) {
+		if (!attRow?.key) return new Uint8Array();
+		if (c.env.r2) {
+			const obj = await c.env.r2.get(attRow.key);
+			if (obj) return new Uint8Array(await obj.arrayBuffer());
+		}
+		if (c.env.kv) {
+			const buf = await c.env.kv.get(attRow.key, 'arrayBuffer');
+			if (buf) return new Uint8Array(buf);
+		}
+		return new Uint8Array();
 	}
 };
 

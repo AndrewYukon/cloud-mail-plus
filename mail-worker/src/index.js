@@ -5,6 +5,7 @@ import verifyRecordService from './service/verify-record-service';
 import emailService from './service/email-service';
 import kvObjService from './service/kv-obj-service';
 import oauthService from "./service/oauth-service";
+export { EmailAgent } from './agent/email-agent';
 export default {
 	 async fetch(req, env, ctx) {
 

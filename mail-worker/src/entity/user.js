@@ -17,6 +17,9 @@ const user = sqliteTable('user', {
 	sort: text('sort').default(0),
 	sendCount: text('send_count').default(0),
 	regKeyId: integer('reg_key_id').default(0).notNull(),
+	agentEnabled: integer('agent_enabled').default(0).notNull(),
+	agentAutoDraft: integer('agent_auto_draft').default(0).notNull(),
+	agentPersona: text('agent_persona').default('').notNull(),
 	isDel: integer('is_del').default(0).notNull()
 });
 export default user
