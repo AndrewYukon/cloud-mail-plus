@@ -117,6 +117,39 @@ Worker 内置 cron 定时任务，每天自动导出 D1 全量数据为 SQL 并 
 - 支持手动触发：`POST /api/backup/<jwt_secret>`
 - 查看备份列表：`GET /api/backup/<jwt_secret>/list`
 
+### 8. AI 邮件助手（Cloudflare Workers AI）
+
+集成 [Cloudflare Workers AI](https://developers.cloudflare.com/workers-ai/) (`@cf/moonshotai/kimi-k2.5`) 的对话式邮件助手，登录后从 Header **✨ 邮件助手** 按钮打开侧边栏即可与 AI 对话。
+
+**9 个邮件工具**（AI 自动选择调用）：
+
+| 工具 | 用途 | 是否需确认 |
+|------|------|----------|
+| `listEmails` | 列出收件箱 / 已发送 / 草稿 / 垃圾箱 | 否 |
+| `searchEmails` | 按主题/发件人/日期搜索邮件 | 否 |
+| `getEmail` | 读取指定邮件全文 + 附件列表 | 否 |
+| `getAttachmentText` | 读取文本类附件（text/* / json / xml / csv） | 否 |
+| `summarizeEmail` | 3-5 行要点摘要 + 行动项 | 否 |
+| `draftReply` | 起草回复（保存到草稿箱） | 否 |
+| `draftNew` | 起草新邮件 | 否 |
+| `sendDraft` | 发送草稿 | **是 ✓** |
+| `deleteEmail` | 删除邮件（软删除/永久删除） | **是 ✓** |
+
+**自动起草新邮件回复** — 收到新邮件时，AI 自动阅读并生成回复草稿保存到草稿箱（**永远不会自动发送**，必须用户在 UI 中确认）。
+
+**安全特性**：
+- 发送、删除操作必须由用户在侧边栏底部的确认卡片中点击「确认」才执行
+- 所有工具调用按用户隔离 — 一个用户的 AI 助手永远看不到其他用户的邮件
+- 工具调用计数封顶（每次对话最多 8 步），避免成本爆炸
+- 自动起草仅 2 步上限（读取 + 起草）
+- AI 模型决定该邮件无需回复时（noreply / spam / 自动通知）会自动跳过
+
+**配置**：登录后进入 **设置** → 滑动到底部 **✨ AI 邮件助手** 部分 → 启用「AI 助手」开关 + 可选「自动起草」+ 自定义人设说明。
+
+**模型与计费**：使用 Cloudflare Workers AI Kimi K2.5。免费层每天 10000 neurons，单次对话约消耗 50-200 neurons，足够正常使用。
+
+**集成栈**：[AI SDK v6](https://sdk.vercel.ai/) + `@ai-sdk/vue` v3 (`Chat` 类) + `workers-ai-provider` + Cloudflare Workers AI。完整中英文 i18n。
+
 ---
 
 ## 部署

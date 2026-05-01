@@ -121,6 +121,39 @@ Built-in Worker cron job exports the entire D1 database as gzipped SQL to R2 dai
 - Manual trigger: `POST /api/backup/<jwt_secret>`
 - List backups: `GET /api/backup/<jwt_secret>/list`
 
+### 8. AI Email Agent (Cloudflare Workers AI)
+
+A conversational email assistant powered by [Cloudflare Workers AI](https://developers.cloudflare.com/workers-ai/) (`@cf/moonshotai/kimi-k2.5`). After signing in, click the **✨ Email Agent** pill in the header to open the side panel and chat with the AI.
+
+**9 email tools** (the model decides which to call):
+
+| Tool | Purpose | Requires confirmation |
+|------|---------|----------------------|
+| `listEmails` | List inbox / sent / drafts / trash | No |
+| `searchEmails` | Search by subject / sender / date | No |
+| `getEmail` | Read full email body + attachment list | No |
+| `getAttachmentText` | Read text-like attachments (text/* / json / xml / csv) | No |
+| `summarizeEmail` | 3-5 bullet summary + action items | No |
+| `draftReply` | Draft a reply (saved to Drafts) | No |
+| `draftNew` | Draft a new email | No |
+| `sendDraft` | Send a draft | **Yes ✓** |
+| `deleteEmail` | Delete email (soft / permanent) | **Yes ✓** |
+
+**Auto-draft on inbound email** — when new mail arrives, the agent reads it and generates a reply draft saved to the Drafts mailbox (**never auto-sent** — explicit user confirmation required at send time).
+
+**Safety guarantees**:
+- Send + delete actions only execute when the user clicks Confirm on the yellow card at the bottom of the side panel
+- Tool calls are scoped per user — one user's agent never sees another user's emails
+- Step count capped per chat turn (max 8) to bound cost
+- Auto-draft is even tighter (max 2 steps: read + draft)
+- The model can decide an email needs no reply (noreply / spam / automated notifications) and skip drafting
+
+**Configuration**: After login, go to **Settings** → scroll to the **✨ AI Email Agent** section → toggle "Enable AI agent" + (optional) "Auto-draft replies" + custom persona instructions.
+
+**Model & cost**: Uses Cloudflare Workers AI Kimi K2.5. Free tier is 10,000 neurons/day; a single chat turn uses ~50–200 neurons, sufficient for normal use.
+
+**Integration stack**: [AI SDK v6](https://sdk.vercel.ai/) + `@ai-sdk/vue` v3 (`Chat` class) + `workers-ai-provider` + Cloudflare Workers AI. Full bilingual i18n.
+
 ---
 
 ## Deployment
