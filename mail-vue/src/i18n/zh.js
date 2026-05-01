@@ -341,6 +341,25 @@ const zh = {
     searchUser: '搜索用户',
     searchEmail: '搜索邮箱',
     searchSender: '搜索发件人',
-    userEmail: '用户邮箱'
+    userEmail: '用户邮箱',
+    aiAgent: 'AI 邮件助手',
+    aiAgentPoweredBy: '由 Cloudflare Workers AI 提供 · 模型：',
+    aiAgentEnable: '启用 AI 助手（侧边栏）',
+    aiAgentEnableHelp: '新增一个侧边栏，包含 9 个邮件工具：列表、搜索、读取附件、摘要、起草、发送、删除。发送和删除操作始终需要明确确认。',
+    aiAgentAutoDraft: '收到新邮件时自动起草回复',
+    aiAgentAutoDraftHelp: '当新邮件到达时，AI 助手会阅读并生成回复草稿。草稿会保存到「草稿箱」—— 永远不会自动发送。',
+    aiAgentPersona: '人设 / 写作风格指令',
+    aiAgentPersonaPlaceholder: "例如：'署名 Andrew。回复保持在 80 字以内。使用发件人的语言。'",
+    aiAgentSaved: 'AI 助手设置已保存',
+    aiAgentSaveFailed: '保存失败：',
+    aiAgentSave: '保存',
+    aiAgentChatTitle: '邮件助手',
+    aiAgentChatPlaceholder: "向助手提问（例如「总结未读收件箱」「为邮件 42 起草回复」）",
+    aiAgentSend: '发送',
+    aiAgentClearChat: '清空聊天记录',
+    aiAgentConfirmSend: '确认发送',
+    aiAgentConfirmDelete: '确认删除',
+    aiAgentPermanentWarn: '永久删除 —— 不可恢复。',
+    aiAgentCancel: '取消'
 }
 export default zh

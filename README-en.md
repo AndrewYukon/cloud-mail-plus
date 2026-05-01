@@ -162,6 +162,39 @@ bash scripts/deploy.sh --destroy --yes  # skip confirmations (CI / scripting)
 
 > `--destroy` permanently deletes mailbox data, attachments, and backups. Back up critical data via `wrangler r2 object` before running.
 
+**One-click AI Email Agent activation:**
+
+```bash
+bash scripts/deploy.sh --with-ai
+```
+
+After deployment:
+1. Sign in to the Web UI (first run requires registering the admin account — email must match `admin` in `wrangler.toml`)
+2. The yellow **✨ Email Agent** pill appears in the top header
+3. **Settings** page has an **✨ AI Email Agent** section — toggle "Enable AI agent" + (optional) "Auto-draft replies" + custom persona
+4. Click the header pill → side panel slides in → chat with the agent
+
+What the agent provides:
+- **9 email tools**: listEmails / searchEmails / getEmail / getAttachmentText / summarizeEmail / draftReply / draftNew / sendDraft / deleteEmail
+- **Send + delete require confirmation** (a yellow card pops up at the bottom of the side panel — never auto-executed)
+- **Auto-draft replies on inbound email** (saved to Drafts — never sent automatically)
+- **Full bilingual i18n** (en / zh, follows the language toggle)
+- **Model**: `@cf/moonshotai/kimi-k2.5` (Cloudflare Workers AI — billed by neurons, free tier is 10,000 neurons/day)
+
+> **Integration**: AI SDK v6 (`ai`) + `@ai-sdk/vue` v3 (`Chat` class) + `workers-ai-provider` + Cloudflare Workers AI. The Worker route calls `streamText()` directly and pipes SSE back (no Durable Object — avoids the WebSocket/HTTP protocol mismatch between AIChatAgent and the Vue Chat client).
+
+### Known deployment notes
+
+- **`pnpm install`** — first deploy may fail with `Could not resolve "workers-ai-provider"` etc. The script auto-installs but the first run is slow.
+- **`compatibility_flags = ["nodejs_compat"]`** — required (the `agents` dependency uses `node:async_hooks` / `node:diagnostics_channel`). The one-click script writes it automatically.
+- **`/api/init/<jwt_secret>`** is a **GET** request, not POST.
+- **Turnstile** — if `site_key` is unset you'll see "Verification module failed to load". After deploy, run:
+  ```bash
+  npx wrangler d1 execute cloud-mail --remote --command "UPDATE setting SET site_key='', secret_key='';"
+  ```
+  Then hard-refresh the browser (Cmd+Shift+R) to disable captcha.
+- **PWA cache** — after redeploy the service worker may keep serving the old bundle. DevTools → Application → Service Workers → Unregister, then hard-refresh.
+
 ### Manual Deploy (Step-by-Step)
 
 For finer control (custom domain, sharing an existing D1, etc.), follow the manual steps below.

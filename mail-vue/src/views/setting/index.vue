@@ -30,6 +30,7 @@
         </div>
       </div>
     </div>
+    <AgentSettings />
     <div class="del-email" v-perm="'my:delete'">
       <div class="title">{{$t('deleteUser')}}</div>
       <div style="color: var(--regular-text-color);">
@@ -56,6 +57,7 @@ import router from "@/router/index.js";
 import {accountSetName} from "@/request/account.js";
 import {useAccountStore} from "@/store/account.js";
 import {useI18n} from "vue-i18n";
+import AgentSettings from '@/views/setting/AgentSettings.vue';
 
 const { t } = useI18n()
 const accountStore = useAccountStore()

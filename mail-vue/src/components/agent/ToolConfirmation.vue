@@ -1,10 +1,16 @@
 <script setup>
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 
 const props = defineProps({ tool: { type: Object, required: true } });
 const emit = defineEmits(['decision']);
+const { t } = useI18n();
 
-const title = computed(() => props.tool.toolName === 'sendDraft' ? '📤 Confirm send' : '🗑 Confirm delete');
+const title = computed(() =>
+  props.tool.toolName === 'sendDraft'
+    ? '📤 ' + t('aiAgentConfirmSend')
+    : '🗑 ' + t('aiAgentConfirmDelete')
+);
 const danger = computed(() => props.tool.toolName === 'deleteEmail' && props.tool.args?.permanent);
 
 function decide(accepted) {
@@ -22,11 +28,11 @@ function decide(accepted) {
     <div class="tool-confirm-card" :class="{ danger }">
       <h3>{{ title }}</h3>
       <pre>{{ JSON.stringify(tool.args, null, 2) }}</pre>
-      <p v-if="danger" class="warn">⚠ Permanent — cannot be undone.</p>
+      <p v-if="danger" class="warn">⚠ {{ $t('aiAgentPermanentWarn') }}</p>
       <div class="actions">
-        <button class="cancel" @click="decide(false)">Cancel</button>
+        <button class="cancel" @click="decide(false)">{{ $t('aiAgentCancel') }}</button>
         <button class="confirm" :class="{ danger }" @click="decide(true)">
-          {{ tool.toolName === 'sendDraft' ? 'Send' : 'Delete' }}
+          {{ tool.toolName === 'sendDraft' ? $t('aiAgentSend') : $t('aiAgentConfirmDelete') }}
         </button>
       </div>
     </div>

@@ -16,15 +16,11 @@ export const useAgentStore = defineStore('agent', {
   actions: {
     async hydrate() {
       try {
-        const userRes = await http.get('/my/info');
-        const u = userRes.data || userRes;
-        this.settings.agentEnabled = !!u.agentEnabled;
-        this.settings.agentAutoDraft = !!u.agentAutoDraft;
-        this.settings.agentPersona = u.agentPersona || '';
-        if (this.settings.agentEnabled) {
-          const r = await http.get('/agent/state');
-          this.messages = r.data?.messages || r.messages || [];
-        }
+        const r = await http.get('/agent/settings');
+        const s = r.data || r;
+        this.settings.agentEnabled = !!s.agentEnabled;
+        this.settings.agentAutoDraft = !!s.agentAutoDraft;
+        this.settings.agentPersona = s.agentPersona || '';
       } catch (e) {
         console.warn('[agent.hydrate]', e);
       } finally {

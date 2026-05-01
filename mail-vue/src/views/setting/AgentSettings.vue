@@ -1,7 +1,10 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
+import { useI18n } from 'vue-i18n';
 import { useAgentStore } from '@/store/agent';
+
+const { t } = useI18n();
 
 const store = useAgentStore();
 const local = ref({ agentEnabled: false, agentAutoDraft: false, agentPersona: '' });
@@ -16,9 +19,9 @@ async function save() {
   saving.value = true;
   try {
     await store.saveSettings(local.value);
-    ElMessage.success('AI Agent settings saved');
+    ElMessage.success(t('aiAgentSaved'));
   } catch (e) {
-    ElMessage.error('Save failed: ' + (e.message || e));
+    ElMessage.error(t('aiAgentSaveFailed') + ' ' + (e.message || e));
   } finally {
     saving.value = false;
   }
@@ -27,34 +30,34 @@ async function save() {
 
 <template>
   <div class="agent-settings">
-    <h2>✨ AI Email Agent</h2>
-    <p class="hint">Powered by Cloudflare Workers AI · model: <code>@cf/moonshotai/kimi-k2.5</code></p>
+    <h2>✨ {{ $t('aiAgent') }}</h2>
+    <p class="hint">{{ $t('aiAgentPoweredBy') }} <code>@cf/moonshotai/kimi-k2.5</code></p>
 
     <el-form label-position="top" style="max-width: 600px;">
-      <el-form-item label="Enable AI agent (side panel)">
+      <el-form-item :label="$t('aiAgentEnable')">
         <el-switch v-model="local.agentEnabled" />
-        <p class="muted">Adds a side panel with 9 email tools: list/search/read attachments/summarize/draft/send/delete. Sending and deleting always require explicit confirmation.</p>
+        <p class="muted">{{ $t('aiAgentEnableHelp') }}</p>
       </el-form-item>
 
-      <el-form-item label="Auto-draft replies on new email">
+      <el-form-item :label="$t('aiAgentAutoDraft')">
         <el-switch v-model="local.agentAutoDraft" :disabled="!local.agentEnabled" />
-        <p class="muted">When a new email arrives, the agent reads it and generates a draft reply. The draft is saved to your Drafts mailbox — it is <b>never sent automatically</b>.</p>
+        <p class="muted">{{ $t('aiAgentAutoDraftHelp') }}</p>
       </el-form-item>
 
-      <el-form-item label="Persona / writing instructions">
+      <el-form-item :label="$t('aiAgentPersona')">
         <el-input
           type="textarea"
           v-model="local.agentPersona"
           :rows="6"
           maxlength="4000"
           show-word-limit
-          placeholder="e.g. 'Sign as Andrew. Keep replies under 80 words. Match the sender's language.'"
+          :placeholder="$t('aiAgentPersonaPlaceholder')"
           :disabled="!local.agentEnabled"
         />
       </el-form-item>
 
       <el-form-item>
-        <el-button type="primary" :loading="saving" @click="save">Save</el-button>
+        <el-button type="primary" :loading="saving" @click="save">{{ $t('aiAgentSave') }}</el-button>
       </el-form-item>
     </el-form>
   </div>

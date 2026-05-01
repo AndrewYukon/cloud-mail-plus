@@ -341,7 +341,26 @@ const en = {
     searchUser: 'Search by user',
     searchEmail: 'Search by Email',
     searchSender: 'Search by Sender',
-    userEmail: 'Email Address'
+    userEmail: 'Email Address',
+    aiAgent: 'AI Email Agent',
+    aiAgentPoweredBy: 'Powered by Cloudflare Workers AI · model:',
+    aiAgentEnable: 'Enable AI agent (side panel)',
+    aiAgentEnableHelp: 'Adds a side panel with 9 email tools: list, search, read attachments, summarize, draft, send, delete. Sending and deleting always require explicit confirmation.',
+    aiAgentAutoDraft: 'Auto-draft replies on new email',
+    aiAgentAutoDraftHelp: 'When a new email arrives, the agent reads it and generates a draft reply. The draft is saved to your Drafts mailbox — it is never sent automatically.',
+    aiAgentPersona: 'Persona / writing instructions',
+    aiAgentPersonaPlaceholder: "e.g. 'Sign as Andrew. Keep replies under 80 words. Match the sender's language.'",
+    aiAgentSaved: 'AI Agent settings saved',
+    aiAgentSaveFailed: 'Save failed:',
+    aiAgentSave: 'Save',
+    aiAgentChatTitle: 'Email Agent',
+    aiAgentChatPlaceholder: "Ask the agent (e.g. 'Summarize unread inbox', 'Draft a reply to email 42')",
+    aiAgentSend: 'Send',
+    aiAgentClearChat: 'Clear chat',
+    aiAgentConfirmSend: 'Confirm send',
+    aiAgentConfirmDelete: 'Confirm delete',
+    aiAgentPermanentWarn: 'Permanent — cannot be undone.',
+    aiAgentCancel: 'Cancel'
 }
 
 export default en

@@ -88,10 +88,10 @@ function escape(s) { return String(s).replace(/[<>&]/g, c => ({'<':'&lt;','>':'&
   <Transition name="slide">
     <aside v-if="visible" class="agent-panel">
       <header class="agent-head">
-        <span>✨ Email Agent</span>
+        <span>✨ {{ $t('aiAgentChatTitle') }}</span>
         <div>
-          <button @click="clearChat" title="Clear chat">🗑</button>
-          <button @click="$emit('close')" title="Close">×</button>
+          <button @click="clearChat" :title="$t('aiAgentClearChat')">🗑</button>
+          <button @click="$emit('close')" title="×">×</button>
         </div>
       </header>
 
@@ -111,10 +111,10 @@ function escape(s) { return String(s).replace(/[<>&]/g, c => ({'<':'&lt;','>':'&
 
       <form class="agent-input" @submit.prevent="onSubmit">
         <textarea v-model="input"
-                  placeholder="Ask the agent (e.g. 'Summarize unread inbox', 'Draft a reply to email 42')"
+                  :placeholder="$t('aiAgentChatPlaceholder')"
                   rows="2"
                   @keydown.enter.exact.prevent="onSubmit" />
-        <button :disabled="chat.status === 'streaming' || !input.trim()">Send</button>
+        <button :disabled="chat.status === 'streaming' || !input.trim()">{{ $t('aiAgentSend') }}</button>
       </form>
     </aside>
   </Transition>

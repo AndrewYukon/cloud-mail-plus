@@ -55,38 +55,3 @@ crons = ["0 16 * * *"]	# Daily housekeeping at 16:00 UTC
 
 [build]
 command = "pnpm --prefix ../mail-vue install && pnpm --prefix ../mail-vue run build"
-
-# >>> cloud-mail-deploy >>>
-[[d1_databases]]
-binding = "db"
-database_name = "cloud-mail"
-database_id = "93ee203d-0336-4c43-b262-d8baace697e6"
-
-[[kv_namespaces]]
-binding = "kv"
-id = "f6c918e2164243d9bd9f135a7b2f29cf"
-
-[[r2_buckets]]
-binding = "r2"
-bucket_name = "cloud-mail-r2"
-
-[[send_email]]
-name = "EMAIL"
-
-# AI Email Agent — Workers AI + EmailAgent Durable Object
-[ai]
-binding = "AI"
-
-[[durable_objects.bindings]]
-name = "EMAIL_AGENT"
-class_name = "EmailAgent"
-
-[[migrations]]
-tag = "v1-add-email-agent"
-new_sqlite_classes = ["EmailAgent"]
-
-[vars]
-domain = '["mysupp.net"]'
-admin = "info@mysupp.net"
-jwt_secret = "112d60c2fc412c7c53973cf30870bb88a30624d2e5d7da8e4f55a75495416038"
-# <<< cloud-mail-deploy <<<

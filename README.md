@@ -165,14 +165,34 @@ bash scripts/deploy.sh --destroy --yes  # 跳过确认（CI/自动化）
 
 ```bash
 bash scripts/deploy.sh --with-ai
-# 部署后访问 Web UI → 设置 → AI Email Agent → 打开「启用 AI agent」+「自动起草」
 ```
 
+部署完成后：
+1. 登录 Web UI（首次需注册管理员账号 — 邮箱必须与 `wrangler.toml` 的 `admin` 一致）
+2. 顶部 Header 出现 **✨ 邮件助手 / Email Agent** 黄色胶囊按钮
+3. **设置** 页面下方有 **✨ AI 邮件助手** 部分 — 打开「启用 AI 助手」+ 可选「自动起草」+ 自定义人设
+4. 点击 Header 按钮 → 侧边栏滑出 → 与 AI 对话
+
 启用后包含的功能：
-- 9 个邮件工具（list / search / get / read attachment / summarize / draft reply / draft new / send / delete）
-- 收到新邮件时自动生成回复草稿（不会自动发送，永远需要用户确认）
-- 每用户独立 Durable Object 实例（聊天历史隔离）
-- 模型：`@cf/moonshotai/kimi-k2.5`
+- **9 个邮件工具**：listEmails / searchEmails / getEmail / getAttachmentText / summarizeEmail / draftReply / draftNew / sendDraft / deleteEmail
+- **发送 + 删除需要二次确认**（在侧边栏底部弹出确认卡片，永远不会自动执行）
+- **收到新邮件时自动起草回复**（保存到草稿箱，不会自动发送）
+- **完整的中英文 i18n**（跟随系统语言切换）
+- **模型**：`@cf/moonshotai/kimi-k2.5`（Cloudflare Workers AI，按 neuron 计费，免费层每天 10000 neurons）
+
+> **集成架构**：AI SDK v6 (`ai` 包) + `@ai-sdk/vue` v3 (`Chat` 类) + `workers-ai-provider` + Cloudflare Workers AI。Worker 路由直接调用 `streamText()` 通过 SSE 流响应（不使用 Durable Object，避免 AIChatAgent 与 Vue Chat 的 WebSocket/HTTP 协议不匹配问题）。
+
+### 已知部署注意事项
+
+- **`pnpm install`** — 首次部署若 worker deps 未安装会报 `Could not resolve "workers-ai-provider"` 等错误。脚本会自动检测并安装，但首次会比较慢。
+- **`compatibility_flags = ["nodejs_compat"]`** — 必须开启（agents 依赖包用了 `node:async_hooks` / `node:diagnostics_channel`）。一键脚本已自动写入。
+- **`/api/init/<jwt_secret>`** 是 **GET** 请求，不是 POST。
+- **Turnstile** — 默认如果没配 site_key 会报 "Verification module failed to load"。一键部署后若遇到，运行：
+  ```bash
+  npx wrangler d1 execute cloud-mail --remote --command "UPDATE setting SET site_key='', secret_key='';"
+  ```
+  然后硬刷新浏览器（Cmd+Shift+R）即可禁用验证码。
+- **PWA 缓存** — 重新部署后 Service Worker 可能仍服务旧版本。DevTools → Application → Service Workers → Unregister，再硬刷新。
 
 ### 手动部署（步骤分解）
 
