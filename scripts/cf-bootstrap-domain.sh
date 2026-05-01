@@ -77,21 +77,29 @@ ROUTING_ENABLED=$(echo "$SETTINGS" | jq -r '.result.enabled // false')
 if [ "$ROUTING_ENABLED" = "true" ]; then
   ok "Email Routing already enabled"
 else
+  # Try DNS provisioning first (uses DNS:Edit, more reliable than the deprecated /enable endpoint)
+  DNS_PROVISION=$(api POST "/zones/$ZONE_ID/email/routing/dns" '{}')
+  if echo "$DNS_PROVISION" | jq -e '.success == true' >/dev/null 2>&1; then
+    ok "MX + SPF DNS records provisioned"
+  fi
+
+  # Try enable endpoint (may fail with code 10000 — token can't call this endpoint)
   ENABLE=$(api POST "/zones/$ZONE_ID/email/routing/enable" '{}')
   if echo "$ENABLE" | jq -e '.success == true' >/dev/null 2>&1; then
-    ok "Email Routing enabled (MX + SPF DNS records auto-created)"
+    ok "Email Routing enabled"
   else
-    # Fallback path for accounts that need explicit DNS provisioning
-    DISABLE_CODE=$(echo "$ENABLE" | jq -r '.errors[0].code // 0')
-    if [ "$DISABLE_CODE" = "1006" ]; then
-      DNS_PROVISION=$(api POST "/zones/$ZONE_ID/email/routing/dns" '{}')
-      if echo "$DNS_PROVISION" | jq -e '.success == true' >/dev/null; then
-        ok "DNS records provisioned; retrying enable..."
-        ENABLE=$(api POST "/zones/$ZONE_ID/email/routing/enable" '{}')
-      fi
-    fi
-    if echo "$ENABLE" | jq -e '.success == true' >/dev/null 2>&1; then
-      ok "Email Routing enabled"
+    ENABLE_CODE=$(echo "$ENABLE" | jq -r '.errors[0].code // 0')
+    if [ "$ENABLE_CODE" = "10000" ]; then
+      warn "Token cannot call /email/routing/enable (this endpoint is dashboard-only on some accounts)"
+      echo
+      echo "  ─── ONE-TIME MANUAL STEP ───"
+      echo "  1. Open https://dash.cloudflare.com/$ACCOUNT_ID/$DOMAIN/email/routing"
+      echo "  2. Click the green 'Enable Email Routing' button"
+      echo "  3. Skip the 'Choose destination' prompt — this script handles it"
+      echo "  4. Re-run: CF_API_TOKEN=... bash $0 $DOMAIN $WORKER ${ADMIN_EMAIL:-}"
+      echo
+      # Continue anyway — catch-all rule may still apply if user enables in parallel
+      warn "Continuing — catch-all + DMARC + verification will still attempt..."
     else
       err "Failed to enable Email Routing"
       echo "$ENABLE" | jq -c '.errors // .messages // .' >&2
