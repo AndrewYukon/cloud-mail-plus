@@ -1,4 +1,4 @@
-import { AIChatAgent } from 'agents/ai-chat-agent';
+import { AIChatAgent } from '@cloudflare/ai-chat';
 import { createWorkersAI } from 'workers-ai-provider';
 import { streamText, generateText, convertToModelMessages, stepCountIs } from 'ai';
 import { buildTools, executeConfirmedTool } from './tools';

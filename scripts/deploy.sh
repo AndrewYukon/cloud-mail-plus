@@ -19,6 +19,8 @@ set -euo pipefail
 #   bash scripts/deploy.sh                # interactive (prompts for AI agent too)
 #   bash scripts/deploy.sh --with-ai      # auto-enable AI Email Agent (non-interactive)
 #   bash scripts/deploy.sh --no-ai        # auto-disable AI Email Agent (non-interactive)
+#   bash scripts/deploy.sh --bootstrap-domain    # also run CF API setup (Email Routing + DNS)
+#                                                # requires CF_API_TOKEN env var
 #   bash scripts/deploy.sh --redeploy     # skip resource creation, just rebuild + ship
 #   bash scripts/deploy.sh --reset        # forget saved state, start fresh
 #   bash scripts/deploy.sh --destroy      # tear down D1/KV/R2 + delete Worker (DANGEROUS)
@@ -42,16 +44,18 @@ STATE_FILE="$REPO_ROOT/.cloud-mail-deploy.env"
 REDEPLOY=false
 DESTROY=false
 ASSUME_YES=false
+BOOTSTRAP_DOMAIN=false
 FORCE_AI=""   # "" = ask, "true" = enable, "false" = disable
 for arg in "$@"; do
   case "$arg" in
-    --redeploy)      REDEPLOY=true ;;
-    --destroy)       DESTROY=true ;;
-    --yes|-y)        ASSUME_YES=true ;;
-    --with-ai)       FORCE_AI="true" ;;
-    --no-ai)         FORCE_AI="false" ;;
-    --reset)         rm -f "$STATE_FILE"; echo "State file removed."; exit 0 ;;
-    -h|--help)       sed -n '4,32p' "$0"; exit 0 ;;
+    --redeploy)         REDEPLOY=true ;;
+    --destroy)          DESTROY=true ;;
+    --yes|-y)           ASSUME_YES=true ;;
+    --with-ai)          FORCE_AI="true" ;;
+    --no-ai)            FORCE_AI="false" ;;
+    --bootstrap-domain) BOOTSTRAP_DOMAIN=true ;;
+    --reset)            rm -f "$STATE_FILE"; echo "State file removed."; exit 0 ;;
+    -h|--help)          sed -n '4,34p' "$0"; exit 0 ;;
     *) echo "Unknown arg: $arg" >&2; exit 1 ;;
   esac
 done
@@ -316,7 +320,8 @@ deploy_worker() {
 init_db() {
   step "7/7" "Initializing D1 schema via /api/init..."
   local code
-  code=$(curl -s -o /tmp/cm-init.out -w "%{http_code}" -X POST "$WORKER_URL/api/init/$JWT_SECRET" || echo "000")
+  # cloud-mail's init endpoint is GET /api/init/:secret
+  code=$(curl -s -o /tmp/cm-init.out -w "%{http_code}" "$WORKER_URL/api/init/$JWT_SECRET" || echo "000")
   if [[ "$code" =~ ^2 ]]; then
     ok "Database initialized"
   elif [ "$code" = "409" ] || grep -qiE "already|exists" /tmp/cm-init.out 2>/dev/null; then
@@ -325,7 +330,7 @@ init_db() {
     warn "Init returned HTTP $code:"
     cat /tmp/cm-init.out 2>/dev/null || true
     echo
-    warn "You may need to run manually: curl -X POST \"$WORKER_URL/api/init/<jwt_secret>\""
+    warn "You may need to run manually: curl \"$WORKER_URL/api/init/<jwt_secret>\""
   fi
   rm -f /tmp/cm-init.out
 }
@@ -535,4 +540,19 @@ deploy_worker
 save_state
 init_db
 save_state
+
+# --- Optional: bootstrap CF Email Routing + DNS via API ---
+if [ "$BOOTSTRAP_DOMAIN" = "true" ]; then
+  if [ -z "${CF_API_TOKEN:-}" ]; then
+    err "--bootstrap-domain requires CF_API_TOKEN env var"
+    echo "  Create one at https://dash.cloudflare.com/profile/api-tokens" >&2
+    echo "  Required scopes: Email Routing Settings/Rules/Addresses Edit, DNS Edit, Zone Read" >&2
+    exit 1
+  fi
+  PRIMARY_DOMAIN="$(echo "$DOMAINS" | awk -F, '{print $1}' | xargs)"
+  step "+1" "Running cf-bootstrap-domain.sh for $PRIMARY_DOMAIN..."
+  CF_API_TOKEN="$CF_API_TOKEN" bash "$SCRIPT_DIR/cf-bootstrap-domain.sh" \
+    "$PRIMARY_DOMAIN" "cloud-mail" "$ADMIN" || warn "cf-bootstrap-domain returned non-zero — review output above"
+fi
+
 print_summary

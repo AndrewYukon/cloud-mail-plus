@@ -1,6 +1,7 @@
 <script setup>
-import { ref, computed, onMounted, watch, nextTick } from 'vue';
-import { useChat } from '@ai-sdk/vue';
+import { ref, computed, onMounted, watch, nextTick, shallowRef } from 'vue';
+import { Chat } from '@ai-sdk/vue';
+import { DefaultChatTransport } from 'ai';
 import MarkdownIt from 'markdown-it';
 import taskLists from 'markdown-it-task-lists';
 import { useAgentStore } from '@/store/agent';
@@ -13,14 +14,23 @@ const emit = defineEmits(['close']);
 const store = useAgentStore();
 const md = new MarkdownIt({ html: false, linkify: true, breaks: true }).use(taskLists);
 const scroller = ref(null);
+const input = ref('');
 
-const { messages, input, handleSubmit, status, addToolResult } = useChat({
+// Token-aware transport so the JWT travels with each chat request.
+const transport = new DefaultChatTransport({
   api: '/api/agent/chat',
-  initialMessages: store.messages,
-  onFinish: (m) => store.appendFinalized(m),
+  fetch: (url, init) => {
+    const headers = new Headers(init?.headers || {});
+    const token = localStorage.getItem('token');
+    if (token) headers.set('Authorization', token);
+    return fetch(url, { ...init, headers });
+  },
 });
 
-watch(messages, async () => {
+// Chat is a class. shallowRef tracks identity; the class manages internal reactivity.
+const chat = shallowRef(new Chat({ transport, messages: store.messages || [] }));
+
+watch(() => chat.value.messages, async () => {
   await nextTick();
   if (scroller.value) scroller.value.scrollTop = scroller.value.scrollHeight;
 }, { deep: true });
@@ -30,27 +40,44 @@ onMounted(async () => {
 });
 
 const pendingConfirm = computed(() =>
-  messages.value
+  chat.value.messages
     .flatMap(m => m.parts || [])
-    .find(p => p.type === 'tool-call' && ['sendDraft', 'deleteEmail'].includes(p.toolName) && !p.result)
+    .find(p =>
+      (p.type === 'tool-call' || (typeof p.type === 'string' && p.type.startsWith('tool-'))) &&
+      ['sendDraft', 'deleteEmail'].includes(p.toolName) &&
+      !(p.output || p.result)
+    )
 );
+
+async function onSubmit() {
+  const text = input.value.trim();
+  if (!text || chat.value.status === 'streaming') return;
+  input.value = '';
+  await chat.value.sendMessage({ text });
+}
 
 async function onConfirmTool({ accepted, toolCallId, toolName, args }) {
   if (!accepted) {
-    addToolResult({ toolCallId, result: { cancelled: true } });
+    chat.value.addToolResult({ toolCallId, output: { cancelled: true } });
     return;
   }
   const r = await http.post('/agent/confirm', { name: toolName, args });
-  addToolResult({ toolCallId, result: r.data });
+  chat.value.addToolResult({ toolCallId, output: r.data || r });
+}
+
+async function clearChat() {
+  await store.clear();
+  chat.value = new Chat({ transport, messages: [] });
 }
 
 function renderPart(part) {
-  if (part.type === 'text') return md.render(part.text);
-  if (part.type === 'tool-call') {
-    return `<div class="tool-call"><b>🔧 ${part.toolName}</b><pre>${escape(JSON.stringify(part.args, null, 2))}</pre></div>`;
+  if (part.type === 'text') return md.render(part.text || '');
+  if (part.type === 'tool-call' || (typeof part.type === 'string' && part.type.startsWith('tool-'))) {
+    const args = part.args || part.input;
+    return `<div class="tool-call"><b>🔧 ${part.toolName || part.type}</b><pre>${escape(JSON.stringify(args, null, 2))}</pre></div>`;
   }
-  if (part.type === 'tool-result') {
-    return `<div class="tool-result"><b>→ ${part.toolName}</b><pre>${escape(JSON.stringify(part.result, null, 2))}</pre></div>`;
+  if (part.type === 'tool-result' || part.output) {
+    return `<div class="tool-result"><b>→ ${part.toolName || 'result'}</b><pre>${escape(JSON.stringify(part.output || part.result, null, 2))}</pre></div>`;
   }
   return '';
 }
@@ -63,17 +90,18 @@ function escape(s) { return String(s).replace(/[<>&]/g, c => ({'<':'&lt;','>':'&
       <header class="agent-head">
         <span>✨ Email Agent</span>
         <div>
-          <button @click="store.clear()" title="Clear chat">🗑</button>
+          <button @click="clearChat" title="Clear chat">🗑</button>
           <button @click="$emit('close')" title="Close">×</button>
         </div>
       </header>
 
       <div ref="scroller" class="agent-body">
-        <div v-for="m in messages" :key="m.id" :class="['msg', m.role]">
+        <div v-for="m in chat.messages" :key="m.id" :class="['msg', m.role]">
           <div v-for="(p, i) in (m.parts || [{type:'text', text:m.content}])"
                :key="i" v-html="renderPart(p)" />
         </div>
-        <div v-if="status === 'streaming'" class="msg assistant typing">…</div>
+        <div v-if="chat.status === 'streaming' || chat.status === 'submitted'" class="msg assistant typing">…</div>
+        <div v-if="chat.error" class="msg error">{{ chat.error.message }}</div>
       </div>
 
       <ToolConfirmation
@@ -81,12 +109,12 @@ function escape(s) { return String(s).replace(/[<>&]/g, c => ({'<':'&lt;','>':'&
         :tool="pendingConfirm"
         @decision="onConfirmTool" />
 
-      <form class="agent-input" @submit.prevent="handleSubmit">
+      <form class="agent-input" @submit.prevent="onSubmit">
         <textarea v-model="input"
                   placeholder="Ask the agent (e.g. 'Summarize unread inbox', 'Draft a reply to email 42')"
                   rows="2"
-                  @keydown.enter.exact.prevent="handleSubmit" />
-        <button :disabled="status === 'streaming' || !input.trim()">Send</button>
+                  @keydown.enter.exact.prevent="onSubmit" />
+        <button :disabled="chat.status === 'streaming' || !input.trim()">Send</button>
       </form>
     </aside>
   </Transition>
@@ -105,6 +133,7 @@ function escape(s) { return String(s).replace(/[<>&]/g, c => ({'<':'&lt;','>':'&
 .msg { margin-bottom: 12px; padding: 8px 12px; border-radius: 8px; }
 .msg.user { background: #f0f7ff; }
 .msg.assistant { background: #fafafa; }
+.msg.error { background: #fee2e2; color: #b91c1c; font-size: 12px; }
 .tool-call, .tool-result { font-size: 12px; background: #fff8e1; padding: 6px 8px; border-radius: 4px; margin: 4px 0; }
 .tool-result { background: #e8f5e9; }
 .tool-call pre, .tool-result pre { margin: 4px 0 0; max-height: 120px; overflow: auto; font-size: 11px; }

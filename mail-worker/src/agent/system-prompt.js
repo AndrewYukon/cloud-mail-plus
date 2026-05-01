@@ -35,7 +35,7 @@ export function buildAutoDraftPrompt({ userEmail, persona, originalEmail }) {
   return `You are auto-drafting a reply on behalf of ${userEmail} to a newly-arrived email.
 
 PERSONA
-  ${persona?.trim() || 'Concise, professional, mirror the sender's tone.'}
+  ${persona?.trim() || "Concise, professional, mirror the sender's tone."}
 
 ORIGINAL EMAIL
   From:    ${originalEmail.sendEmail}
