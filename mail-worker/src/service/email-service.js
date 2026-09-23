@@ -910,7 +910,7 @@ const emailService = {
 		const rows = await orm(c).select().from(email)
 			.where(and(...conds))
 			.orderBy(desc(email.emailId))
-			.limit(50)
+			.limit(200)
 			.all();
 
 		return rows.map(r => {

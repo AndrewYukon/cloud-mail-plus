@@ -47,16 +47,19 @@ onActivated(() => {
 });
 
 watch(() => draftStore.setDraft, async () => {
-  const draft = toRaw(draftStore.setDraft);
+  const draft = { ...toRaw(draftStore.setDraft) };
   const draftId = draft.draftId;
   const isServerDraft = !!draft.isServerDraft;
   const serverId = draft.serverId;
-  const attachments = toRaw(draftStore.setDraft.attachments);
+  const attachments = toRaw(draftStore.setDraft.attachments) || [];
 
   delete draft.draftId;
   delete draft.attachments;
   delete draft.isServerDraft;
   delete draft.serverId;
+  delete draft.key;
+  delete draft.origEmailId;
+  delete draft.checked;
 
   if (!draft.content && !draft.subject && !(draft.receiveEmail?.length > 0)) {
     if (isServerDraft && serverId) {
@@ -72,8 +75,13 @@ watch(() => draftStore.setDraft, async () => {
   }
 
   if (!isServerDraft) {
-    await db.value.draft.put({ draftId, ...draft });
-    await db.value.att.put({ draftId, attachments });
+    if (!draft.createTime) {
+      delete draft.createTime;
+    }
+    if (draftId && typeof draftId === 'number') {
+      await db.value.draft.update(draftId, draft);
+      await db.value.att.put({ draftId, attachments });
+    }
   }
   draftStore.refreshList++;
 }, {
@@ -102,7 +110,11 @@ watch(() => draftStore.refreshList, () => {
   }, 250);
 });
 
-async function getEmailList() {
+async function getEmailList(lastId) {
+  if (lastId) {
+    return { list: [] };
+  }
+
   let serverList = [];
   try {
     const res = await emailDraftList();
@@ -127,6 +139,7 @@ async function getEmailList() {
     isServerDraft: false,
     key: 'local-' + item.draftId,
     emailId: 'local-' + item.draftId,
+    origEmailId: item.emailId || 0,
   }));
 
   const formattedServer = serverList.map(item => ({
@@ -135,45 +148,33 @@ async function getEmailList() {
     serverId: item.serverId || item.emailId,
     key: 'server-' + (item.serverId || item.emailId),
     emailId: 'server-' + (item.serverId || item.emailId),
+    origEmailId: item.replyEmailId || 0,
   }));
 
   const list = [...formattedLocal, ...formattedServer].sort((a, b) => {
     return (b.createTime || '').localeCompare(a.createTime || '');
   });
 
-  return { list };
+  return { list, total: list.length };
 }
 
-async function deleteDraft(draftIds) {
-  if (!draftIds || draftIds.length === 0) return;
-  
-  const currentList = scroll.value?.emailList || [];
-  const selectedItems = currentList.filter(item =>
-    draftIds.includes(item.draftId) || draftIds.includes(item.serverId) || draftIds.includes(item.emailId) || draftIds.includes(item.key)
-  );
+async function deleteDraft(draftKeys) {
+  if (!draftKeys || draftKeys.length === 0) return;
 
   const serverIdsToDelete = [];
   const localIdsToDelete = [];
 
-  if (selectedItems.length > 0) {
-    for (const item of selectedItems) {
-      if (item.isServerDraft && item.serverId) {
-        serverIdsToDelete.push(item.serverId);
-      } else if (!item.isServerDraft && item.draftId) {
-        localIdsToDelete.push(item.draftId);
+  for (const k of draftKeys) {
+    if (typeof k === 'string') {
+      if (k.startsWith('server-')) {
+        const sid = Number(k.replace('server-', ''));
+        if (sid > 0) serverIdsToDelete.push(sid);
+      } else if (k.startsWith('local-')) {
+        const lid = Number(k.replace('local-', ''));
+        if (lid > 0) localIdsToDelete.push(lid);
       }
-    }
-  } else {
-    for (const id of draftIds) {
-      if (typeof id === 'string' && id.startsWith('server-')) {
-        const numId = Number(id.replace('server-', ''));
-        if (numId > 0) serverIdsToDelete.push(numId);
-      } else if (typeof id === 'string' && id.startsWith('local-')) {
-        const numId = Number(id.replace('local-', ''));
-        if (numId > 0) localIdsToDelete.push(numId);
-      } else if (typeof id === 'number') {
-        localIdsToDelete.push(id);
-      }
+    } else if (typeof k === 'number') {
+      localIdsToDelete.push(k);
     }
   }
 
@@ -197,6 +198,7 @@ async function jumpContent(email) {
   if (email.isServerDraft) {
     uiStore.writerRef.openDraft({
       ...email,
+      emailId: email.origEmailId || 0,
       draftId: email.serverId,
       serverId: email.serverId,
       isServerDraft: true,
@@ -205,8 +207,12 @@ async function jumpContent(email) {
     return;
   }
   const att = await db.value.att.get(email.draftId);
-  email.attachments = att?.attachments || [];
-  uiStore.writerRef.openDraft(email);
+  const attachments = att?.attachments || [];
+  uiStore.writerRef.openDraft({
+    ...email,
+    emailId: email.origEmailId || 0,
+    attachments,
+  });
 }
 
 </script>
