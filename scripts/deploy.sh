@@ -86,7 +86,15 @@ preflight() {
     err "neither pnpm nor npm found"; exit 1
   fi
   [ -d "$WORKER_DIR" ] || { err "mail-worker dir not found at $WORKER_DIR"; exit 1; }
-  [ -f "$WRANGLER_TOML" ] || { err "wrangler.toml not found at $WRANGLER_TOML"; exit 1; }
+  if [ ! -f "$WRANGLER_TOML" ]; then
+    if [ -f "$WORKER_DIR/wrangler.toml.example" ]; then
+      step "0/7" "Initializing wrangler.toml from wrangler.toml.example..."
+      cp "$WORKER_DIR/wrangler.toml.example" "$WRANGLER_TOML"
+      ok "Created wrangler.toml from template"
+    else
+      err "Neither wrangler.toml nor wrangler.toml.example found at $WORKER_DIR"; exit 1
+    fi
+  fi
 
   cd "$WORKER_DIR"
   if [ ! -d node_modules ]; then

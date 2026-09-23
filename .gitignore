@@ -27,3 +27,4 @@ mail-vue/dist
 .venv
 .cloud-mail-deploy.env
 .admin-credentials.txt
+mail-worker/wrangler.toml
