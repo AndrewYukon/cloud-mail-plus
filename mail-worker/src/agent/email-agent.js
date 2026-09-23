@@ -1,10 +1,9 @@
 import { AIChatAgent } from '@cloudflare/ai-chat';
-import { createWorkersAI } from 'workers-ai-provider';
 import { streamText, generateText, convertToModelMessages, stepCountIs } from 'ai';
 import { buildTools, executeConfirmedTool } from './tools';
 import { buildSystemPrompt, buildAutoDraftPrompt } from './system-prompt';
-
-const MODEL_ID = '@cf/moonshotai/kimi-k2.5';
+import { resolveLanguageModel } from './provider';
+import userService from '../service/user-service';
 
 // Per-user agent. Routes deterministically to a single DO instance via
 //   env.EMAIL_AGENT.idFromName(`user-${userId}`)
@@ -13,11 +12,22 @@ export class EmailAgent extends AIChatAgent {
   // Called by AIChatAgent when a new chat message arrives over the websocket / SSE pipe.
   async onChatMessage(onFinish) {
     const { userId, userEmail, persona, currentBoxName, locale } = await this._loadContext();
-    const workersai = createWorkersAI({ binding: this.env.AI });
-    const tools = buildTools({ env: this.env, userId, userEmail });
+    const user = userId ? await userService.findById({ env: this.env }, userId) : null;
+    let model;
+    try {
+      model = resolveLanguageModel({ env: this.env }, user || {});
+    } catch (err) {
+      console.error('[email-agent] resolveLanguageModel failed:', err);
+      try {
+        model = resolveLanguageModel({ env: this.env }, { agentProvider: 'workers-ai' });
+      } catch (fallbackErr) {
+        throw new Error(`AI model initialization failed: ${err.message}`);
+      }
+    }
+    const tools = buildTools({ env: this.env, userId, userEmail, user });
 
     const result = streamText({
-      model: workersai(MODEL_ID),
+      model,
       system: buildSystemPrompt({ userEmail, persona, currentBoxName, locale }),
       messages: convertToModelMessages(this.messages),
       tools,
@@ -41,14 +51,21 @@ export class EmailAgent extends AIChatAgent {
     const { userId, userEmail, persona } = await this._loadContext();
     if (!userId) return { skipped: true, reason: 'no-userId' };
 
+    const user = await userService.findById({ env: this.env }, userId);
     // Fetch the original email server-side
-    const tools = buildTools({ env: this.env, userId, userEmail });
+    const tools = buildTools({ env: this.env, userId, userEmail, user });
     const original = await tools.getEmail.execute({ emailId });
     if (original.error) return { skipped: true, reason: original.error };
+    let model;
+    try {
+      model = resolveLanguageModel({ env: this.env }, user || {});
+    } catch (err) {
+      console.error('[auto-draft] resolve model failed:', err);
+      return { skipped: true, reason: 'model-resolve-failed: ' + err.message };
+    }
 
-    const workersai = createWorkersAI({ binding: this.env.AI });
     const { text, toolCalls } = await generateText({
-      model: workersai(MODEL_ID),
+      model,
       system: buildAutoDraftPrompt({ userEmail, persona, originalEmail: original }),
       prompt: 'Decide and act per the system prompt.',
       tools: { draftReply: tools.draftReply },  // restrict to single tool
