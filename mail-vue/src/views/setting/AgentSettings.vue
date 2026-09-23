@@ -1,8 +1,9 @@
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
 import { useI18n } from 'vue-i18n';
 import { useAgentStore } from '@/store/agent';
+import { isSameEndpoint } from './agent-endpoint';
 
 const { t } = useI18n();
 
@@ -26,6 +27,9 @@ const testingConnection = ref(false);
 const testResult = ref(null);
 const modelOptions = ref([]);
 const clearApiKeyRequested = ref(false);
+const endpointChanged = computed(() => {
+  return !isSameEndpoint(local.value, store.settings);
+});
 
 function onClearApiKey() {
   local.value.agentApiKey = '';
@@ -325,6 +329,9 @@ async function save() {
                   {{ $t('aiAgentRestoreKey') }}
                 </el-button>
               </div>
+              <p v-if="endpointChanged && store.settings.hasApiKey && !local.agentApiKey" style="color: #e6a23c; font-size: 12px; margin-top: 4px; line-height: 1.4;">
+                ⚠️ {{ $t('aiAgentEndpointChangedWarning') }}
+              </p>
             </el-form-item>
           </div>
         </template>
@@ -369,6 +376,9 @@ async function save() {
                   {{ $t('aiAgentRestoreKey') }}
                 </el-button>
               </div>
+              <p v-if="endpointChanged && store.settings.hasApiKey && !local.agentApiKey" style="color: #e6a23c; font-size: 12px; margin-top: 4px; line-height: 1.4;">
+                ⚠️ {{ $t('aiAgentEndpointChangedWarning') }}
+              </p>
             </el-form-item>
           </div>
         </template>

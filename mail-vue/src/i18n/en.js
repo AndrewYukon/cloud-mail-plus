@@ -387,6 +387,7 @@ const en = {
     aiAgentClearKey: 'Clear Key',
     aiAgentRestoreKey: 'Undo Clear',
     aiAgentKeyMarkedForClear: 'API Key marked for removal, save to apply',
+    aiAgentEndpointChangedWarning: 'Endpoint has changed. Saving will clear the existing API Key (enter a new Key if needed).',
     aiAgentApiKeyCleared: 'Key marked for removal, save to apply',
     aiAgentKeepSavedKey: 'leave blank to keep unchanged',
     aiAgentChatTitle: 'Email Agent',

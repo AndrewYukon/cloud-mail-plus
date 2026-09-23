@@ -387,6 +387,7 @@ const zh = {
     aiAgentClearKey: '清除 Key',
     aiAgentRestoreKey: '撤销清除',
     aiAgentKeyMarkedForClear: '已标记清除 API Key，点击底部「保存」后生效',
+    aiAgentEndpointChangedWarning: '端点已更改，保存后将清除已保存的 API Key（若需要请重新输入新 Key）',
     aiAgentApiKeyCleared: 'Key 已标记清除，保存后生效',
     aiAgentKeepSavedKey: '留空表示保持不变',
     aiAgentChatTitle: '邮件助手',

@@ -18,11 +18,7 @@ export class EmailAgent extends AIChatAgent {
       model = resolveLanguageModel({ env: this.env }, user || {});
     } catch (err) {
       console.error('[email-agent] resolveLanguageModel failed:', err);
-      try {
-        model = resolveLanguageModel({ env: this.env }, { agentProvider: 'workers-ai' });
-      } catch (fallbackErr) {
-        throw new Error(`AI model initialization failed: ${err.message}`);
-      }
+      throw new Error(`AI model initialization failed: ${err.message}`);
     }
     const tools = buildTools({ env: this.env, userId, userEmail, user });
 

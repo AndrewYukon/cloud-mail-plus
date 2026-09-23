@@ -6,6 +6,7 @@ import { streamText, stepCountIs } from 'ai';
 import { buildTools, executeConfirmedTool } from '../agent/tools';
 import { buildSystemPrompt } from '../agent/system-prompt';
 import { resolveLanguageModel, fetchAvailableModels, testModelConnectivity, maskApiKey } from '../agent/provider';
+import { isSameEndpoint } from '../agent/endpoint';
 
 // ---- chat: AI SDK v6 streaming, direct (no DO routing — protocol mismatch with AIChatAgent) ----
 app.post('/agent/chat', async (c) => {
@@ -130,19 +131,8 @@ app.put('/agent/settings', async (c) => {
   const userId = userContext.getUserId(c);
   if (!userId) return c.json(result.fail('unauthorized'), 401);
 
+  const dbUser = await userService.findById(c, userId);
   const body = await c.req.json().catch(() => ({}));
-  const {
-    agentEnabled,
-    agentAutoDraft,
-    agentPersona,
-    agentProvider,
-    agentCfAccountId,
-    agentAiGatewayId,
-    agentGatewayProvider,
-    agentBaseUrl,
-    agentApiKey,
-    agentModel,
-  } = body;
 
   const updatePayload = {};
   if ('agentEnabled' in body) updatePayload.agentEnabled = body.agentEnabled ? 1 : 0;
@@ -155,13 +145,27 @@ app.put('/agent/settings', async (c) => {
   if ('agentBaseUrl' in body) updatePayload.agentBaseUrl = (body.agentBaseUrl || '').trim();
   if ('agentModel' in body) updatePayload.agentModel = (body.agentModel || '').trim();
 
-  // Support clearing key: empty string or null explicitly clears saved key
-  if ('agentApiKey' in body) {
-    if (body.agentApiKey === '' || body.agentApiKey === null) {
-      updatePayload.agentApiKey = '';
-    } else if (typeof body.agentApiKey === 'string' && body.agentApiKey.trim() !== '' && !body.agentApiKey.includes('****')) {
-      updatePayload.agentApiKey = body.agentApiKey.trim();
-    }
+  // Compute effective endpoint configuration merging body with dbUser
+  const effectiveConfig = {
+    provider: 'agentProvider' in body ? body.agentProvider : dbUser?.agentProvider,
+    cfAccountId: 'agentCfAccountId' in body ? body.agentCfAccountId : dbUser?.agentCfAccountId,
+    aiGatewayId: 'agentAiGatewayId' in body ? body.agentAiGatewayId : dbUser?.agentAiGatewayId,
+    gatewayProvider: 'agentGatewayProvider' in body ? body.agentGatewayProvider : dbUser?.agentGatewayProvider,
+    baseUrl: 'agentBaseUrl' in body ? body.agentBaseUrl : dbUser?.agentBaseUrl,
+  };
+  const endpointChanged = !isSameEndpoint(effectiveConfig, dbUser);
+
+  // API Key semantics:
+  // 1. Non-empty string not containing '****': update to new key
+  // 2. Explicit null: clear key
+  // 3. Endpoint changed without new key: auto-clear old key to prevent leaking to new host
+  // 4. Missing or empty string '' when endpoint is unchanged: keep existing key
+  if (typeof body.agentApiKey === 'string' && body.agentApiKey.trim() !== '' && !body.agentApiKey.includes('****')) {
+    updatePayload.agentApiKey = body.agentApiKey.trim();
+  } else if (body.agentApiKey === null) {
+    updatePayload.agentApiKey = '';
+  } else if (endpointChanged) {
+    updatePayload.agentApiKey = '';
   }
 
   await userService.updateAgentSettings(c, userId, updatePayload);
@@ -182,12 +186,15 @@ app.post('/agent/models', async (c) => {
   const baseUrl = body.baseUrl ?? u?.agentBaseUrl;
   const apiKey = body.apiKey;
 
-  // Security: only reuse savedApiKey if endpoint/provider matches what is stored in DB
-  const isSameEndpoint = provider === (u?.agentProvider || 'workers-ai') &&
-    (baseUrl || '').trim() === (u?.agentBaseUrl || '').trim() &&
-    (aiGatewayId || '').trim() === (u?.agentAiGatewayId || '').trim() &&
-    (cfAccountId || '').trim() === (u?.agentCfAccountId || '').trim();
-  const savedApiKey = isSameEndpoint ? u?.agentApiKey : undefined;
+  // Security: only reuse savedApiKey if endpoint matches what is stored in DB
+  const sameEndpoint = isSameEndpoint({
+    provider,
+    cfAccountId,
+    aiGatewayId,
+    gatewayProvider,
+    baseUrl,
+  }, u);
+  const savedApiKey = sameEndpoint ? u?.agentApiKey : undefined;
 
   try {
     const models = await fetchAvailableModels({
@@ -220,12 +227,15 @@ app.post('/agent/test', async (c) => {
   const baseUrl = body.baseUrl ?? u?.agentBaseUrl;
   const apiKey = body.apiKey;
 
-  // Security: only reuse savedApiKey if endpoint/provider matches what is stored in DB
-  const isSameEndpoint = provider === (u?.agentProvider || 'workers-ai') &&
-    (baseUrl || '').trim() === (u?.agentBaseUrl || '').trim() &&
-    (aiGatewayId || '').trim() === (u?.agentAiGatewayId || '').trim() &&
-    (cfAccountId || '').trim() === (u?.agentCfAccountId || '').trim();
-  const savedApiKey = isSameEndpoint ? u?.agentApiKey : undefined;
+  // Security: only reuse savedApiKey if endpoint matches what is stored in DB
+  const sameEndpoint = isSameEndpoint({
+    provider,
+    cfAccountId,
+    aiGatewayId,
+    gatewayProvider,
+    baseUrl,
+  }, u);
+  const savedApiKey = sameEndpoint ? u?.agentApiKey : undefined;
   const model = (body.model || body.agentModel || u?.agentModel || '').trim();
 
   try {

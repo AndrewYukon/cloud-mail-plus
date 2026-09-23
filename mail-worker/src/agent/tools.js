@@ -135,35 +135,26 @@ export function buildTools({ env, userId, userEmail, user }) {
         const original = await emailService.detail(c, emailId, userId);
         if (!original) return { error: 'Original email not found' };
 
+        const effectiveUser = user || {};
+        const provider = effectiveUser.agentProvider || 'workers-ai';
         let html = '';
-        let modelUsed = user?.agentModel || '@cf/moonshotai/kimi-k2.5';
-        if (user) {
-          try {
-            const m = resolveLanguageModel(c, user);
-            const res = await generateText({
-              model: m,
-              system: `Write a ${tone} email reply in clean HTML (no <html>/<body>, no markdown). Match the sender's language. Sign as ${userEmail.split('@')[0]}.`,
-              prompt: `Reply to:\nFrom: ${original.sendEmail}\nSubject: ${original.subject}\n\n${(original.text || original.content || '').slice(0, 4000)}\n\nInstructions: ${instructions}`,
-            });
-            html = res.text || '';
-            modelUsed = user.agentModel || user.agentProvider;
-          } catch (e) {
-            console.warn('[draftReply] user model failed, trying Workers AI fallback:', e?.message);
-          }
+        let modelUsed = effectiveUser.agentModel || (provider === 'workers-ai' ? '@cf/moonshotai/kimi-k2.5' : provider);
+
+        try {
+          const m = resolveLanguageModel(c, effectiveUser);
+          const res = await generateText({
+            model: m,
+            system: `Write a ${tone} email reply in clean HTML (no <html>/<body>, no markdown). Match the sender's language. Sign as ${userEmail.split('@')[0]}.`,
+            prompt: `Reply to:\nFrom: ${original.sendEmail}\nSubject: ${original.subject}\n\n${(original.text || original.content || '').slice(0, 4000)}\n\nInstructions: ${instructions}`,
+          });
+          html = res.text || '';
+        } catch (e) {
+          console.error('[draftReply] model generation failed:', e?.message);
+          return { error: `Failed to generate email content: ${e?.message || 'unknown error'}` };
         }
-        if (!html && env?.AI) {
-          try {
-            const r = await env.AI.run('@cf/moonshotai/kimi-k2.5', {
-              messages: [
-                { role: 'system', content: `Write a ${tone} email reply in clean HTML (no <html>/<body>, no markdown). Match the sender's language. Sign as ${userEmail.split('@')[0]}.` },
-                { role: 'user', content: `Reply to:\nFrom: ${original.sendEmail}\nSubject: ${original.subject}\n\n${(original.text || original.content || '').slice(0, 4000)}\n\nInstructions: ${instructions}` },
-              ],
-            });
-            html = r.response || r.result?.response || '';
-            modelUsed = '@cf/moonshotai/kimi-k2.5';
-          } catch (e) {
-            console.error('[draftReply] Workers AI fallback failed:', e?.message);
-          }
+
+        if (!html || !html.trim()) {
+          return { error: 'Failed to generate email content: AI generated empty response' };
         }
 
         const draftId = await emailService.saveDraft(c, {
@@ -179,7 +170,7 @@ export function buildTools({ env, userId, userEmail, user }) {
           text: html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(),
           aiMetadata: JSON.stringify({ source: 'tool', sourceEmailId: emailId, model: modelUsed }),
         });
-        return { draftId, preview: html.slice(0, 400), to: original.sendEmail };
+        return { draftId, preview: html.slice(0, 400), to: original.sendEmail, modelUsed };
       },
     }),
 
@@ -191,35 +182,26 @@ export function buildTools({ env, userId, userEmail, user }) {
         instructions: z.string().min(1),
       }),
       execute: async ({ to, subject, instructions }) => {
+        const effectiveUser = user || {};
+        const provider = effectiveUser.agentProvider || 'workers-ai';
         let html = '';
-        let modelUsed = user?.agentModel || '@cf/moonshotai/kimi-k2.5';
-        if (user) {
-          try {
-            const m = resolveLanguageModel(c, user);
-            const res = await generateText({
-              model: m,
-              system: `Write an email body in clean HTML. Sign as ${userEmail.split('@')[0]}. No markdown.`,
-              prompt: `To: ${to}\nSubject: ${subject}\nInstructions: ${instructions}`,
-            });
-            html = res.text || '';
-            modelUsed = user.agentModel || user.agentProvider;
-          } catch (e) {
-            console.warn('[draftNew] user model failed, trying Workers AI fallback:', e?.message);
-          }
+        let modelUsed = effectiveUser.agentModel || (provider === 'workers-ai' ? '@cf/moonshotai/kimi-k2.5' : provider);
+
+        try {
+          const m = resolveLanguageModel(c, effectiveUser);
+          const res = await generateText({
+            model: m,
+            system: `Write an email body in clean HTML. Sign as ${userEmail.split('@')[0]}. No markdown.`,
+            prompt: `To: ${to}\nSubject: ${subject}\nInstructions: ${instructions}`,
+          });
+          html = res.text || '';
+        } catch (e) {
+          console.error('[draftNew] model generation failed:', e?.message);
+          return { error: `Failed to generate email content: ${e?.message || 'unknown error'}` };
         }
-        if (!html && env?.AI) {
-          try {
-            const r = await env.AI.run('@cf/moonshotai/kimi-k2.5', {
-              messages: [
-                { role: 'system', content: `Write an email body in clean HTML. Sign as ${userEmail.split('@')[0]}. No markdown.` },
-                { role: 'user', content: `To: ${to}\nSubject: ${subject}\nInstructions: ${instructions}` },
-              ],
-            });
-            html = r.response || r.result?.response || '';
-            modelUsed = '@cf/moonshotai/kimi-k2.5';
-          } catch (e) {
-            console.error('[draftNew] Workers AI fallback failed:', e?.message);
-          }
+
+        if (!html || !html.trim()) {
+          return { error: 'Failed to generate email content: AI generated empty response' };
         }
 
         let accountId = 0;
@@ -240,7 +222,7 @@ export function buildTools({ env, userId, userEmail, user }) {
           text: html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(),
           aiMetadata: JSON.stringify({ source: 'tool-new', model: modelUsed }),
         });
-        return { draftId, preview: html.slice(0, 400) };
+        return { draftId, preview: html.slice(0, 400), modelUsed };
       },
     }),
 

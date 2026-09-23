@@ -12,35 +12,12 @@ export const WORKERS_AI_MODELS = [
   { id: '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b', name: 'DeepSeek R1 Distill Qwen 32B' },
 ];
 
-export function validateSafeEndpointUrl(urlStr) {
-  if (!urlStr || typeof urlStr !== 'string') {
-    throw new Error('Invalid endpoint URL');
-  }
-  let parsed;
-  try {
-    parsed = new URL(urlStr);
-  } catch {
-    throw new Error('Invalid URL format');
-  }
-  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
-    throw new Error('Only https:// protocols are supported');
-  }
-  const hostname = parsed.hostname.toLowerCase();
-  // Disallow loopback, private RFC1918, link-local, cloud metadata
-  if (
-    hostname === 'localhost' ||
-    hostname === '0.0.0.0' ||
-    hostname === '127.0.0.1' ||
-    hostname === '::1' ||
-    hostname.startsWith('10.') ||
-    hostname.startsWith('192.168.') ||
-    hostname.startsWith('169.254.') ||
-    /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname)
-  ) {
-    throw new Error('Access to private or local IP addresses is prohibited');
-  }
-  return parsed.toString().replace(/\/+$/, '');
-}
+export {
+  normalizeEndpoint,
+  isSameEndpoint,
+  validateSafeEndpointUrl,
+} from './endpoint.js';
+import { validateSafeEndpointUrl } from './endpoint.js';
 
 export function buildAiGatewayBaseUrl(accountId, gatewayId, provider = 'openai') {
   const cleanAccount = (accountId || '').trim();
