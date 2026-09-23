@@ -54,6 +54,11 @@ app.get('/email/attList', async (c) => {
 	return c.json(result.ok(attList));
 });
 
+app.get('/email/draftList', async (c) => {
+	const draftList = await emailService.draftList(c, c.req.query(), userContext.getUserId(c));
+	return c.json(result.ok(draftList));
+});
+
 app.post('/email/send', async (c) => {
 	const email = await emailService.send(c, await c.req.json(), userContext.getUserId(c));
 	return c.json(result.ok(email));

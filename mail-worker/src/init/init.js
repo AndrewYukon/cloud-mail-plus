@@ -727,6 +727,8 @@ const dbInit = {
 				c.env.db.prepare(`ALTER TABLE user ADD COLUMN agent_model TEXT NOT NULL DEFAULT ''`),
 			]);
 		}
+
+		await c.env.db.prepare(`CREATE INDEX IF NOT EXISTS idx_email_user_status_type ON email(user_id, status, type)`).run().catch(() => {});
 	}
 };
 export { dbInit };

@@ -24,9 +24,9 @@
 
 <script setup>
 import emailScroll from "@/components/email-scroll/index.vue"
-import {emailDelete} from "@/request/email.js";
+import {emailDelete, emailDraftList} from "@/request/email.js";
 import {starAdd, starCancel} from "@/request/star.js";
-import {defineOptions, ref, watch, toRaw} from "vue";
+import {defineOptions, ref, watch, toRaw, onActivated} from "vue";
 import {useUiStore} from "@/store/ui.js";
 import {userDraftStore} from "@/store/draft.js";
 import db from "@/db/db.js"
@@ -39,52 +39,173 @@ const draftStore = userDraftStore();
 const uiStore = useUiStore();
 const scroll = ref({})
 
+let refreshTimer = null;
+let isRefreshing = false;
+
+onActivated(() => {
+  scroll.value?.refreshList?.();
+});
+
 watch(() => draftStore.setDraft, async () => {
+  const draft = toRaw(draftStore.setDraft);
+  const draftId = draft.draftId;
+  const isServerDraft = !!draft.isServerDraft;
+  const serverId = draft.serverId;
+  const attachments = toRaw(draftStore.setDraft.attachments);
 
-  const draft = toRaw(draftStore.setDraft)
-  const draftId = draft.draftId
-  const attachments = toRaw(draftStore.setDraft.attachments)
+  delete draft.draftId;
+  delete draft.attachments;
+  delete draft.isServerDraft;
+  delete draft.serverId;
 
-  delete draft.draftId
-  delete draft.attachments
-
-  if (!draft.content && !draft.subject && !(draft.receiveEmail.length > 0)) {
-    await db.value.draft.delete(draftId);
-    await db.value.att.delete(draftId);
-    draftStore.refreshList++
+  if (!draft.content && !draft.subject && !(draft.receiveEmail?.length > 0)) {
+    if (isServerDraft && serverId) {
+      try {
+        await emailDelete(serverId);
+      } catch (_) {}
+    } else if (draftId && typeof draftId === 'number') {
+      await db.value.draft.delete(draftId);
+      await db.value.att.delete(draftId);
+    }
+    draftStore.refreshList++;
     return;
   }
 
-  await db.value.draft.update(draftId, draft);
-  await db.value.att.update(draftId, {attachments: attachments});
-  draftStore.refreshList++
+  if (!isServerDraft) {
+    await db.value.draft.put({ draftId, ...draft });
+    await db.value.att.put({ draftId, attachments });
+  }
+  draftStore.refreshList++;
 }, {
   deep: true
-})
+});
 
-watch(() => draftStore.refreshList, async () => {
-  const {list} = await getEmailList();
-    scroll.value.emailList.length = 0
-    scroll.value.handleList(list);
-    scroll.value.emailList.push(...list)
-})
+async function doRefresh() {
+  if (isRefreshing) return;
+  isRefreshing = true;
+  try {
+    const { list } = await getEmailList();
+    if (scroll.value?.emailList) {
+      scroll.value.emailList.length = 0;
+      scroll.value.handleList(list);
+      scroll.value.emailList.push(...list);
+    }
+  } finally {
+    isRefreshing = false;
+  }
+}
 
-function getEmailList() {
-  return new Promise((resolve, reject) => {
-    db.value.draft.orderBy('createTime').reverse().toArray().then(list => {
-      resolve({list})
-    })
-  })
+watch(() => draftStore.refreshList, () => {
+  if (refreshTimer) clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(() => {
+    doRefresh();
+  }, 250);
+});
+
+async function getEmailList() {
+  let serverList = [];
+  try {
+    const res = await emailDraftList();
+    if (Array.isArray(res)) {
+      serverList = res;
+    } else if (res && Array.isArray(res.data)) {
+      serverList = res.data;
+    }
+  } catch (e) {
+    console.error('Failed to load server drafts', e);
+  }
+
+  let localList = [];
+  try {
+    localList = await db.value.draft.orderBy('createTime').reverse().toArray();
+  } catch (e) {
+    console.error('Failed to load local drafts', e);
+  }
+
+  const formattedLocal = localList.map(item => ({
+    ...item,
+    isServerDraft: false,
+    key: 'local-' + item.draftId,
+    emailId: 'local-' + item.draftId,
+  }));
+
+  const formattedServer = serverList.map(item => ({
+    ...item,
+    isServerDraft: true,
+    serverId: item.serverId || item.emailId,
+    key: 'server-' + (item.serverId || item.emailId),
+    emailId: 'server-' + (item.serverId || item.emailId),
+  }));
+
+  const list = [...formattedLocal, ...formattedServer].sort((a, b) => {
+    return (b.createTime || '').localeCompare(a.createTime || '');
+  });
+
+  return { list };
 }
 
 async function deleteDraft(draftIds) {
-  await db.value.draft.bulkDelete(draftIds);
-  draftStore.refreshList++
+  if (!draftIds || draftIds.length === 0) return;
+  
+  const currentList = scroll.value?.emailList || [];
+  const selectedItems = currentList.filter(item =>
+    draftIds.includes(item.draftId) || draftIds.includes(item.serverId) || draftIds.includes(item.emailId) || draftIds.includes(item.key)
+  );
+
+  const serverIdsToDelete = [];
+  const localIdsToDelete = [];
+
+  if (selectedItems.length > 0) {
+    for (const item of selectedItems) {
+      if (item.isServerDraft && item.serverId) {
+        serverIdsToDelete.push(item.serverId);
+      } else if (!item.isServerDraft && item.draftId) {
+        localIdsToDelete.push(item.draftId);
+      }
+    }
+  } else {
+    for (const id of draftIds) {
+      if (typeof id === 'string' && id.startsWith('server-')) {
+        const numId = Number(id.replace('server-', ''));
+        if (numId > 0) serverIdsToDelete.push(numId);
+      } else if (typeof id === 'string' && id.startsWith('local-')) {
+        const numId = Number(id.replace('local-', ''));
+        if (numId > 0) localIdsToDelete.push(numId);
+      } else if (typeof id === 'number') {
+        localIdsToDelete.push(id);
+      }
+    }
+  }
+
+  if (localIdsToDelete.length > 0) {
+    await db.value.draft.bulkDelete(localIdsToDelete);
+    await db.value.att.bulkDelete(localIdsToDelete);
+  }
+
+  if (serverIdsToDelete.length > 0) {
+    try {
+      await emailDelete(serverIdsToDelete.join(','));
+    } catch (e) {
+      console.error('Failed to delete server drafts', e);
+    }
+  }
+
+  draftStore.refreshList++;
 }
 
 async function jumpContent(email) {
-  const att = await db.value.att.get(email.draftId)
-  email.attachments = att.attachments
+  if (email.isServerDraft) {
+    uiStore.writerRef.openDraft({
+      ...email,
+      draftId: email.serverId,
+      serverId: email.serverId,
+      isServerDraft: true,
+      attachments: email.attachments || []
+    });
+    return;
+  }
+  const att = await db.value.att.get(email.draftId);
+  email.attachments = att?.attachments || [];
   uiStore.writerRef.openDraft(email);
 }
 

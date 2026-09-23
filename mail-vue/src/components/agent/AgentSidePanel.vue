@@ -5,6 +5,7 @@ import { DefaultChatTransport } from 'ai';
 import MarkdownIt from 'markdown-it';
 import taskLists from 'markdown-it-task-lists';
 import { useAgentStore } from '@/store/agent';
+import { userDraftStore } from '@/store/draft';
 import ToolConfirmation from './ToolConfirmation.vue';
 import http from '@/axios/index.js';
 
@@ -12,6 +13,7 @@ const props = defineProps({ visible: Boolean });
 const emit = defineEmits(['close']);
 
 const store = useAgentStore();
+const draftStore = userDraftStore();
 const md = new MarkdownIt({ html: false, linkify: true, breaks: true }).use(taskLists);
 const scroller = ref(null);
 const input = ref('');
@@ -34,6 +36,20 @@ watch(() => chat.value.messages, async () => {
   await nextTick();
   if (scroller.value) scroller.value.scrollTop = scroller.value.scrollHeight;
 }, { deep: true });
+
+watch(() => chat.value.status, (newStatus, oldStatus) => {
+  if (newStatus === 'ready' && (oldStatus === 'streaming' || oldStatus === 'submitted')) {
+    const hasDraftTool = (chat.value.messages || []).some(m =>
+      (m.parts || []).some(p =>
+        (p.type === 'tool-call' || (typeof p.type === 'string' && p.type.startsWith('tool-'))) &&
+        ['draftReply', 'draftNew', 'sendDraft'].includes(p.toolName)
+      )
+    );
+    if (hasDraftTool) {
+      draftStore.refreshList++;
+    }
+  }
+});
 
 onMounted(async () => {
   if (!store.hydrated) await store.hydrate();
@@ -63,6 +79,9 @@ async function onConfirmTool({ accepted, toolCallId, toolName, args }) {
   }
   const r = await http.post('/agent/confirm', { name: toolName, args });
   chat.value.addToolResult({ toolCallId, output: r.data || r });
+  if (['draftReply', 'draftNew', 'sendDraft'].includes(toolName)) {
+    draftStore.refreshList++;
+  }
 }
 
 async function clearChat() {

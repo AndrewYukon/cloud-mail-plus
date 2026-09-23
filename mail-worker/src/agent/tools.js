@@ -1,4 +1,4 @@
-import { tool } from 'ai';
+import { tool, generateText } from 'ai';
 import { z } from 'zod';
 import { eq, and, like, gte, lte, desc } from 'drizzle-orm';
 import emailService from '../service/email-service';
@@ -6,11 +6,13 @@ import cfEmailService from '../service/cf-email-service';
 import attService from '../service/att-service';
 import orm from '../entity/orm';
 import { email as emailEntity } from '../entity/email';
+import accountEntity from '../entity/account';
 import { isDel, emailConst } from '../const/entity-const';
+import { resolveLanguageModel } from './provider';
 
 // Tool factory — binds env + userId so each user only sees their own data.
 // `c` mirrors the Hono context shape that the rest of the codebase uses: `{ env }`.
-export function buildTools({ env, userId, userEmail }) {
+export function buildTools({ env, userId, userEmail, user }) {
   const c = { env };
 
   return {
@@ -132,23 +134,50 @@ export function buildTools({ env, userId, userEmail }) {
       execute: async ({ emailId, instructions, tone }) => {
         const original = await emailService.detail(c, emailId, userId);
         if (!original) return { error: 'Original email not found' };
-        const r = await env.AI.run('@cf/moonshotai/kimi-k2.5', {
-          messages: [
-            { role: 'system', content: `Write a ${tone} email reply in clean HTML (no <html>/<body>, no markdown). Match the sender's language. Sign as ${userEmail.split('@')[0]}.` },
-            { role: 'user', content: `Reply to:\nFrom: ${original.sendEmail}\nSubject: ${original.subject}\n\n${(original.text || original.content || '').slice(0, 4000)}\n\nInstructions: ${instructions}` },
-          ],
-        });
-        const html = r.response || r.result?.response || '';
+
+        let html = '';
+        let modelUsed = user?.agentModel || '@cf/moonshotai/kimi-k2.5';
+        if (user) {
+          try {
+            const m = resolveLanguageModel(c, user);
+            const res = await generateText({
+              model: m,
+              system: `Write a ${tone} email reply in clean HTML (no <html>/<body>, no markdown). Match the sender's language. Sign as ${userEmail.split('@')[0]}.`,
+              prompt: `Reply to:\nFrom: ${original.sendEmail}\nSubject: ${original.subject}\n\n${(original.text || original.content || '').slice(0, 4000)}\n\nInstructions: ${instructions}`,
+            });
+            html = res.text || '';
+            modelUsed = user.agentModel || user.agentProvider;
+          } catch (e) {
+            console.warn('[draftReply] user model failed, trying Workers AI fallback:', e?.message);
+          }
+        }
+        if (!html && env?.AI) {
+          try {
+            const r = await env.AI.run('@cf/moonshotai/kimi-k2.5', {
+              messages: [
+                { role: 'system', content: `Write a ${tone} email reply in clean HTML (no <html>/<body>, no markdown). Match the sender's language. Sign as ${userEmail.split('@')[0]}.` },
+                { role: 'user', content: `Reply to:\nFrom: ${original.sendEmail}\nSubject: ${original.subject}\n\n${(original.text || original.content || '').slice(0, 4000)}\n\nInstructions: ${instructions}` },
+              ],
+            });
+            html = r.response || r.result?.response || '';
+            modelUsed = '@cf/moonshotai/kimi-k2.5';
+          } catch (e) {
+            console.error('[draftReply] Workers AI fallback failed:', e?.message);
+          }
+        }
+
         const draftId = await emailService.saveDraft(c, {
           userId,
           accountId: original.accountId,
+          sendEmail: original.toEmail || userEmail,
           toEmail: original.sendEmail,
+          toName: original.name || '',
           subject: original.subject?.startsWith('Re: ') ? original.subject : `Re: ${original.subject || ''}`,
           inReplyTo: original.messageId || '',
           relation: `${original.relation || ''} ${original.messageId || ''}`.trim(),
           content: html,
           text: html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(),
-          aiMetadata: JSON.stringify({ source: 'tool', sourceEmailId: emailId, model: '@cf/moonshotai/kimi-k2.5' }),
+          aiMetadata: JSON.stringify({ source: 'tool', sourceEmailId: emailId, model: modelUsed }),
         });
         return { draftId, preview: html.slice(0, 400), to: original.sendEmail };
       },
@@ -162,17 +191,54 @@ export function buildTools({ env, userId, userEmail }) {
         instructions: z.string().min(1),
       }),
       execute: async ({ to, subject, instructions }) => {
-        const r = await env.AI.run('@cf/moonshotai/kimi-k2.5', {
-          messages: [
-            { role: 'system', content: `Write an email body in clean HTML. Sign as ${userEmail.split('@')[0]}. No markdown.` },
-            { role: 'user', content: `To: ${to}\nSubject: ${subject}\nInstructions: ${instructions}` },
-          ],
-        });
-        const html = r.response || r.result?.response || '';
+        let html = '';
+        let modelUsed = user?.agentModel || '@cf/moonshotai/kimi-k2.5';
+        if (user) {
+          try {
+            const m = resolveLanguageModel(c, user);
+            const res = await generateText({
+              model: m,
+              system: `Write an email body in clean HTML. Sign as ${userEmail.split('@')[0]}. No markdown.`,
+              prompt: `To: ${to}\nSubject: ${subject}\nInstructions: ${instructions}`,
+            });
+            html = res.text || '';
+            modelUsed = user.agentModel || user.agentProvider;
+          } catch (e) {
+            console.warn('[draftNew] user model failed, trying Workers AI fallback:', e?.message);
+          }
+        }
+        if (!html && env?.AI) {
+          try {
+            const r = await env.AI.run('@cf/moonshotai/kimi-k2.5', {
+              messages: [
+                { role: 'system', content: `Write an email body in clean HTML. Sign as ${userEmail.split('@')[0]}. No markdown.` },
+                { role: 'user', content: `To: ${to}\nSubject: ${subject}\nInstructions: ${instructions}` },
+              ],
+            });
+            html = r.response || r.result?.response || '';
+            modelUsed = '@cf/moonshotai/kimi-k2.5';
+          } catch (e) {
+            console.error('[draftNew] Workers AI fallback failed:', e?.message);
+          }
+        }
+
+        let accountId = 0;
+        try {
+          const acct = await orm(c).select({ accountId: accountEntity.accountId }).from(accountEntity)
+            .where(and(eq(accountEntity.userId, userId), eq(accountEntity.email, userEmail))).get();
+          if (acct) accountId = acct.accountId;
+        } catch (_) {}
+
         const draftId = await emailService.saveDraft(c, {
-          userId, accountId: 0, toEmail: to, subject, content: html,
+          userId,
+          accountId,
+          sendEmail: userEmail,
+          toEmail: to,
+          toName: '',
+          subject,
+          content: html,
           text: html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(),
-          aiMetadata: JSON.stringify({ source: 'tool-new', model: '@cf/moonshotai/kimi-k2.5' }),
+          aiMetadata: JSON.stringify({ source: 'tool-new', model: modelUsed }),
         });
         return { draftId, preview: html.slice(0, 400) };
       },

@@ -353,7 +353,7 @@ async function sendEmail() {
 
   emailSend(form, (e) => {
     percent.value = Math.round((e.loaded * 98) / e.total)
-  }).then(emailList => {
+  }).then(async (emailList) => {
     const email = emailList[0]
     emailList.forEach(item => {
       emailStore.sendScroll?.addItem(item)
@@ -370,7 +370,12 @@ async function sendEmail() {
 
     addRecipientRecord();
 
-    if (form.draftId) {
+    if (form.isServerDraft && form.serverId) {
+      try {
+        await emailDelete(form.serverId);
+      } catch (_) {}
+      draftStore.refreshList++;
+    } else if (form.draftId) {
       form.subject = ''
       form.content = ''
       form.receiveEmail = []
@@ -417,6 +422,8 @@ function resetForm() {
   form.sendType = ''
   form.emailId = 0
   form.draftId = null
+  form.isServerDraft = false
+  form.serverId = null
   backReply.content = ''
   backReply.subject = ''
   backReply.receiveEmail = []
@@ -522,6 +529,28 @@ function open() {
 
 function openDraft(draft) {
   Object.assign(form, {...draft})
+  if (draft.isServerDraft) {
+    form.isServerDraft = true;
+    form.serverId = draft.serverId || draft.emailId;
+    if (draft.sendType === 'reply') {
+      form.sendType = 'reply';
+      form.emailId = draft.replyEmailId || draft.serverId || draft.emailId;
+    }
+  } else {
+    form.isServerDraft = false;
+    form.serverId = null;
+  }
+  if (!form.accountId || form.accountId <= 0) {
+    if (!accountStore.currentAccount.email) {
+      form.sendEmail = userStore.user.email;
+      form.accountId = userStore.user.account?.accountId || 0;
+      form.name = userStore.user.name;
+    } else {
+      form.sendEmail = accountStore.currentAccount.email;
+      form.accountId = accountStore.currentAccount.accountId;
+      form.name = accountStore.currentAccount.name;
+    }
+  }
   defValue.value = ''
   setTimeout(() => defValue.value = form.content)
   show.value = true;
@@ -550,10 +579,16 @@ function close() {
     form.content = editor.value.getContent();
   }
 
-  if (form.draftId) {
+  if (form.draftId && !form.isServerDraft) {
     draftStore.setDraft = {...toRaw(form)}
     show.value = false
     resetForm()
+    return;
+  }
+
+  if (form.isServerDraft) {
+    show.value = false;
+    resetForm();
     return;
   }
 

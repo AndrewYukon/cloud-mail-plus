@@ -35,6 +35,7 @@ const emailService = {
 		timeSort = Number(timeSort);
 		accountId = Number(accountId);
 		allReceive = Number(allReceive);
+		type = Number(type);
 
 		if (size > 50) {
 			size = 50;
@@ -77,6 +78,7 @@ const emailService = {
 					eq(email.userId, userId),
 					timeSort ? gt(email.emailId, emailId) : lt(email.emailId, emailId),
 					eq(email.type, type),
+					type === emailConst.type.SEND ? ne(email.status, emailConst.status.SAVING) : eq(1, 1),
 					eq(email.isDel, isDel.NORMAL),
 					eq(account.isDel, isDel.NORMAL)
 				)
@@ -100,6 +102,7 @@ const emailService = {
 					allReceive ? eq(1,1) : eq(email.accountId, accountId),
 					eq(email.userId, userId),
 					eq(email.type, type),
+					type === emailConst.type.SEND ? ne(email.status, emailConst.status.SAVING) : eq(1, 1),
 					eq(email.isDel, isDel.NORMAL),
 					eq(account.isDel, isDel.NORMAL)
 				)
@@ -110,6 +113,7 @@ const emailService = {
 				allReceive ? eq(1,1) : eq(email.accountId, accountId),
 				eq(email.userId, userId),
 				eq(email.type, type),
+				type === emailConst.type.SEND ? ne(email.status, emailConst.status.SAVING) : eq(1, 1),
 				eq(email.isDel, isDel.NORMAL)
 			))
 			.orderBy(desc(email.emailId)).limit(1).get();
@@ -338,6 +342,8 @@ const emailService = {
 		});
 
 		emailData.recipient = JSON.stringify(recipient);
+		emailData.toEmail = receiveEmail[0] || '';
+		emailData.toName = emailUtils.getName(emailData.toEmail);
 
 		if (sendType === 'reply') {
 			emailData.inReplyTo = emailRow.messageId;
@@ -865,11 +871,18 @@ const emailService = {
 	},
 
 	async saveDraft(c, fields) {
+		const toEmail = fields.toEmail || '';
+		const toName = fields.toName || '';
+		const recipient = fields.recipient || JSON.stringify(toEmail ? [{ address: toEmail, name: toName }] : []);
 		const row = {
 			userId: fields.userId,
 			accountId: fields.accountId || 0,
-			sendEmail: '',
-			toEmail: fields.toEmail || '',
+			sendEmail: fields.sendEmail || '',
+			toEmail,
+			toName,
+			recipient,
+			cc: fields.cc || '[]',
+			bcc: fields.bcc || '[]',
 			subject: fields.subject || '',
 			content: fields.content || '',
 			text: fields.text || '',
@@ -879,10 +892,68 @@ const emailService = {
 			type: emailConst.type.SEND,
 			status: emailConst.status.SAVING,
 			aiMetadata: fields.aiMetadata || '',
+			unread: 0,
+			createTime: fields.createTime || dayjs().format('YYYY-MM-DD HH:mm:ss'),
 			isDel: isDel.NORMAL,
 		};
 		const [inserted] = await orm(c).insert(email).values(row).returning({ emailId: email.emailId });
 		return inserted.emailId;
+	},
+
+	async draftList(c, params, userId) {
+		const conds = [
+			eq(email.userId, userId),
+			eq(email.type, emailConst.type.SEND),
+			eq(email.status, emailConst.status.SAVING),
+			eq(email.isDel, isDel.NORMAL)
+		];
+		const rows = await orm(c).select().from(email)
+			.where(and(...conds))
+			.orderBy(desc(email.emailId))
+			.limit(50)
+			.all();
+
+		return rows.map(r => {
+			let receiveEmail = [];
+			try {
+				if (r.recipient) {
+					const parsed = JSON.parse(r.recipient);
+					if (Array.isArray(parsed)) {
+						receiveEmail = parsed.map(item => typeof item === 'string' ? item : item?.address).filter(Boolean);
+					}
+				}
+			} catch (_) {}
+			if (receiveEmail.length === 0 && r.toEmail) {
+				receiveEmail = [r.toEmail];
+			}
+
+			let meta = null;
+			try {
+				if (r.aiMetadata) meta = JSON.parse(r.aiMetadata);
+			} catch (_) {}
+
+			return {
+				draftId: r.emailId,
+				emailId: r.emailId,
+				serverId: r.emailId,
+				receiveEmail,
+				toEmail: r.toEmail,
+				toName: r.toName,
+				sendEmail: r.sendEmail,
+				subject: r.subject || '',
+				content: r.content || '',
+				text: r.text || '',
+				accountId: r.accountId,
+				createTime: r.createTime,
+				aiMetadata: r.aiMetadata,
+				attachments: [],
+				isServerDraft: true,
+				inReplyTo: r.inReplyTo || '',
+				relation: r.relation || '',
+				sendType: r.inReplyTo ? 'reply' : '',
+				replyEmailId: meta?.sourceEmailId || null,
+			};
+		});
 	},
 
 	async markSent(c, emailId, userId, sendResult) {
