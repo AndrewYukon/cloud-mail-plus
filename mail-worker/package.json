@@ -5,6 +5,7 @@
 	"scripts": {
 		"dev": "wrangler dev --config wrangler-dev.toml",
 		"test": "wrangler deploy --config wrangler-test.toml",
+		"test:unit": "vitest run -c vitest.unit.config.js",
 		"deploy": "wrangler deploy",
 		"start": "wrangler dev"
 	},
@@ -20,6 +21,7 @@
 		]
 	},
 	"dependencies": {
+		"@ai-sdk/openai": "^3.0.115",
 		"@aws-sdk/client-s3": "^3.882.0",
 		"@cloudflare/ai-chat": "^0.6.0",
 		"@cloudflare/vite-plugin": "1.6.0",

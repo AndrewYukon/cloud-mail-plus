@@ -97,7 +97,7 @@ import tinyEditor from '@/components/tiny-editor/index.vue'
 import {h, nextTick, onMounted, onUnmounted, reactive, ref, toRaw, computed} from "vue";
 import {Icon} from "@iconify/vue";
 import {useUserStore} from "@/store/user.js";
-import {emailSend} from "@/request/email.js";
+import {emailSend, emailDelete} from "@/request/email.js";
 import {isEmail} from "@/utils/verify-utils.js";
 import {useAccountStore} from "@/store/account.js";
 import {useEmailStore} from "@/store/email.js";
@@ -139,6 +139,7 @@ const contactsTabRef = ref({})
 const showContacts = ref(false)
 const mySelect = ref()
 let selectStatus = false
+const serverDraftSnapshot = ref(null);
 const backReply = reactive({
   receiveEmail: [],
   subject: '',
@@ -157,6 +158,9 @@ const form = reactive({
   emailId: 0,
   attachments: [],
   draftId: null,
+  isServerDraft: false,
+  serverId: null,
+  createTime: '',
 })
 
 const selectRecipientList = ref([])
@@ -353,7 +357,7 @@ async function sendEmail() {
 
   emailSend(form, (e) => {
     percent.value = Math.round((e.loaded * 98) / e.total)
-  }).then(emailList => {
+  }).then(async (emailList) => {
     const email = emailList[0]
     emailList.forEach(item => {
       emailStore.sendScroll?.addItem(item)
@@ -370,7 +374,14 @@ async function sendEmail() {
 
     addRecipientRecord();
 
-    if (form.draftId) {
+    if (form.isServerDraft && form.serverId) {
+      try {
+        await emailDelete(form.serverId);
+      } catch (e) {
+        console.error('[write] failed to delete server draft after send:', e);
+      }
+      draftStore.refreshList++;
+    } else if (form.draftId) {
       form.subject = ''
       form.content = ''
       form.receiveEmail = []
@@ -417,6 +428,10 @@ function resetForm() {
   form.sendType = ''
   form.emailId = 0
   form.draftId = null
+  form.isServerDraft = false
+  form.serverId = null
+  form.createTime = ''
+  serverDraftSnapshot.value = null
   backReply.content = ''
   backReply.subject = ''
   backReply.receiveEmail = []
@@ -521,9 +536,60 @@ function open() {
 }
 
 function openDraft(draft) {
-  Object.assign(form, {...draft})
+  form.sendEmail = draft.sendEmail || '';
+  form.receiveEmail = Array.isArray(draft.receiveEmail) ? [...draft.receiveEmail] : [];
+  form.accountId = draft.accountId ?? -1;
+  form.name = draft.name || '';
+  form.subject = draft.subject || '';
+  form.content = draft.content || '';
+  form.text = draft.text || '';
+  form.manyType = draft.manyType ?? null;
+  form.attachments = Array.isArray(draft.attachments) ? [...draft.attachments] : [];
+  form.isServerDraft = !!draft.isServerDraft;
+  form.serverId = draft.isServerDraft ? (draft.serverId || draft.emailId) : null;
+  form.draftId = draft.isServerDraft ? null : (draft.draftId ?? null);
+  form.createTime = draft.createTime || '';
+
+  if (draft.isServerDraft) {
+    if (draft.sendType === 'reply' && draft.replyEmailId) {
+      form.sendType = 'reply';
+      form.emailId = draft.replyEmailId;
+    } else {
+      form.sendType = '';
+      form.emailId = 0;
+    }
+    serverDraftSnapshot.value = {
+      subject: form.subject || '',
+      receiveEmail: [...(form.receiveEmail || [])],
+      attCount: (form.attachments || []).length,
+      initialText: null,
+      initialHtml: null,
+    };
+  } else {
+    form.sendType = draft.sendType || '';
+    form.emailId = draft.emailId || 0;
+    serverDraftSnapshot.value = null;
+  }
+  if (!form.accountId || form.accountId <= 0) {
+    if (!accountStore.currentAccount.email) {
+      form.sendEmail = userStore.user.email;
+      form.accountId = userStore.user.account?.accountId || 0;
+      form.name = userStore.user.name;
+    } else {
+      form.sendEmail = accountStore.currentAccount.email;
+      form.accountId = accountStore.currentAccount.accountId;
+      form.name = accountStore.currentAccount.name;
+    }
+  }
   defValue.value = ''
-  setTimeout(() => defValue.value = form.content)
+  setTimeout(async () => {
+    defValue.value = form.content;
+    await nextTick();
+    if (serverDraftSnapshot.value) {
+      serverDraftSnapshot.value.initialText = (editor.value?.getContent?.({ format: 'text' }) || '').trim();
+      serverDraftSnapshot.value.initialHtml = editor.value?.getContent?.() || '';
+    }
+  })
   show.value = true;
   editor.value.focus()
 }
@@ -550,10 +616,69 @@ function close() {
     form.content = editor.value.getContent();
   }
 
-  if (form.draftId) {
+  if (form.draftId && !form.isServerDraft) {
     draftStore.setDraft = {...toRaw(form)}
     show.value = false
     resetForm()
+    return;
+  }
+
+  if (form.isServerDraft) {
+    const snapshot = serverDraftSnapshot.value;
+    let isDirty = false;
+    if (snapshot) {
+      const currentText = (editor.value?.getContent?.({ format: 'text' }) || '').trim();
+      const currentHtml = editor.value?.getContent?.() || '';
+      const contentChanged = (snapshot.initialText !== null && currentText !== snapshot.initialText) ||
+                             (snapshot.initialHtml !== null && currentHtml !== snapshot.initialHtml);
+      const subjectChanged = (form.subject || '') !== snapshot.subject;
+      const receiveChanged = JSON.stringify(form.receiveEmail || []) !== JSON.stringify(snapshot.receiveEmail || []);
+      const attChanged = (form.attachments?.length || 0) !== snapshot.attCount;
+      isDirty = contentChanged || subjectChanged || receiveChanged || attChanged;
+    }
+
+    if (!isDirty) {
+      show.value = false;
+      resetForm();
+      return;
+    }
+
+    ElMessageBox.confirm(t('saveDraftConfirm'), {
+      confirmButtonText: t('confirm'),
+      cancelButtonText: t('cancel'),
+      type: 'warning',
+      distinguishCancelAndClose: true
+    }).then(async () => {
+      const formData = {...toRaw(form)};
+      const serverId = form.serverId;
+      delete formData.draftId;
+      delete formData.attachments;
+      delete formData.isServerDraft;
+      delete formData.serverId;
+      delete formData.key;
+      delete formData.origEmailId;
+      delete formData.checked;
+      formData.createTime = dayjs().utc().format('YYYY-MM-DD HH:mm:ss');
+      const draftId = await db.value.draft.add({...formData});
+      await db.value.att.add({draftId, attachments: toRaw(form.attachments) || []});
+      if (serverId) {
+        try {
+          await emailDelete(serverId);
+        } catch (e) {
+          console.error('[write] failed to delete server draft after save:', e);
+        }
+      }
+      draftStore.refreshList++;
+      show.value = false;
+      await nextTick(() => {
+        resetForm();
+      });
+    }).catch((action) => {
+      if (action === 'cancel') {
+        show.value = false;
+        resetForm();
+      }
+    });
     return;
   }
 
@@ -571,8 +696,8 @@ function close() {
       receiveFlag = true;
     }
     if (subjectFlag && contentFlag && receiveFlag) {
+      show.value = false;
       resetForm();
-      close()
       return;
     }
   }
@@ -586,9 +711,14 @@ function close() {
     const formData = {...toRaw(form)};
     delete formData.draftId
     delete formData.attachments
+    delete formData.isServerDraft;
+    delete formData.serverId;
+    delete formData.key;
+    delete formData.origEmailId;
+    delete formData.checked;
     formData.createTime = dayjs().utc().format('YYYY-MM-DD HH:mm:ss');
     const draftId = await db.value.draft.add({...formData})
-    db.value.att.add({draftId, attachments: toRaw(form.attachments)})
+    await db.value.att.add({draftId, attachments: toRaw(form.attachments) || []})
     draftStore.refreshList++
     show.value = false
     await nextTick(() => {

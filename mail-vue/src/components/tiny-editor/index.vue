@@ -163,8 +163,8 @@ function focus() {
   })
 }
 
-function getContent() {
-  return editor.value.getContent()
+function getContent(args) {
+  return editor.value ? editor.value.getContent(args) : ''
 }
 
 

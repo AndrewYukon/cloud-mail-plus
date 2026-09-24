@@ -20,6 +20,13 @@ const user = sqliteTable('user', {
 	agentEnabled: integer('agent_enabled').default(0).notNull(),
 	agentAutoDraft: integer('agent_auto_draft').default(0).notNull(),
 	agentPersona: text('agent_persona').default('').notNull(),
+	agentProvider: text('agent_provider').default('workers-ai').notNull(),
+	agentCfAccountId: text('agent_cf_account_id').default('').notNull(),
+	agentAiGatewayId: text('agent_ai_gateway_id').default('').notNull(),
+	agentGatewayProvider: text('agent_gateway_provider').default('openai').notNull(),
+	agentBaseUrl: text('agent_base_url').default('').notNull(),
+	agentApiKey: text('agent_api_key').default('').notNull(),
+	agentModel: text('agent_model').default('').notNull(),
 	isDel: integer('is_del').default(0).notNull()
 });
 export default user

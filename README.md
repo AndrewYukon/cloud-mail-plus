@@ -249,6 +249,12 @@ wrangler r2 bucket create cloud-mail-r2
 
 3. **配置 `wrangler.toml`**
 
+从模板文件复制 `wrangler.toml`（该配置文件已被 `.gitignore` 忽略，避免泄露敏感配置）：
+
+```bash
+cp wrangler.toml.example wrangler.toml
+```
+
 将上一步生成的 ID 填入 `wrangler.toml`：
 
 ```toml

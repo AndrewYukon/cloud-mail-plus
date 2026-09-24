@@ -248,7 +248,15 @@ wrangler kv namespace create cloud-mail-kv
 wrangler r2 bucket create cloud-mail-r2
 ```
 
-3. **Configure `wrangler.toml`** — fill in the IDs from step 2
+3. **Configure `wrangler.toml`**
+   
+   Copy `wrangler.toml.example` to `wrangler.toml` (git-ignored to prevent committing credentials):
+
+   ```bash
+   cp wrangler.toml.example wrangler.toml
+   ```
+
+   Fill in the IDs from step 2 in `wrangler.toml`:
 
 4. **Enable CF Email Service** (optional) — onboard your domain in Cloudflare Dashboard > Email > Email Sending, then uncomment `[[send_email]]` in `wrangler.toml`
 

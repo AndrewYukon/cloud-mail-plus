@@ -10,6 +10,15 @@ export const useAgentStore = defineStore('agent', {
       agentEnabled: false,
       agentAutoDraft: false,
       agentPersona: '',
+      agentProvider: 'workers-ai',
+      agentCfAccountId: '',
+      agentAiGatewayId: '',
+      agentGatewayProvider: 'openai',
+      agentBaseUrl: '',
+      agentApiKey: '',
+      agentApiKeyMasked: '',
+      hasApiKey: false,
+      agentModel: '',
     },
   }),
 
@@ -21,6 +30,15 @@ export const useAgentStore = defineStore('agent', {
         this.settings.agentEnabled = !!s.agentEnabled;
         this.settings.agentAutoDraft = !!s.agentAutoDraft;
         this.settings.agentPersona = s.agentPersona || '';
+        this.settings.agentProvider = s.agentProvider || 'workers-ai';
+        this.settings.agentCfAccountId = s.agentCfAccountId || '';
+        this.settings.agentAiGatewayId = s.agentAiGatewayId || '';
+        this.settings.agentGatewayProvider = s.agentGatewayProvider || 'openai';
+        this.settings.agentBaseUrl = s.agentBaseUrl || '';
+        this.settings.agentApiKeyMasked = s.agentApiKeyMasked || '';
+        this.settings.hasApiKey = !!s.hasApiKey;
+        this.settings.agentApiKey = ''; // Clear typed key, backend keeps it safe
+        this.settings.agentModel = s.agentModel || '';
       } catch (e) {
         console.warn('[agent.hydrate]', e);
       } finally {
@@ -30,7 +48,20 @@ export const useAgentStore = defineStore('agent', {
 
     async saveSettings(patch) {
       Object.assign(this.settings, patch);
-      await http.put('/agent/settings', this.settings);
+      const r = await http.put('/agent/settings', this.settings);
+      // Re-hydrate to refresh masked key
+      await this.hydrate();
+      return r.data || r;
+    },
+
+    async fetchModels(params) {
+      const r = await http.post('/agent/models', params);
+      return r.data || r;
+    },
+
+    async testConnection(params) {
+      const r = await http.post('/agent/test', params);
+      return r.data || r;
     },
 
     async clear() {

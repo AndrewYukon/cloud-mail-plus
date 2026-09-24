@@ -636,6 +636,10 @@ function localRead(emailIds) {
 }
 
 function rightDelete(emailId) {
+  if (props.type === 'draft') {
+    emit('delete-draft', [rightClickEmail.key]);
+    return;
+  }
 
   if (props.type === 'all-email') {
     ElMessageBox.confirm(t('delOneEmailConfirm'), {
@@ -799,7 +803,7 @@ function getSelectedMailsIds() {
 }
 
 function getSelectedDraftsIds() {
-  return emailList.filter(item => item.checked).map(item => item.draftId);
+  return emailList.filter(item => item.checked).map(item => item.key);
 }
 
 function updateCheckStatus() {

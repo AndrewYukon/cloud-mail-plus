@@ -381,11 +381,25 @@ const userService = {
 			.get();
 	},
 
-	async updateAgentSettings(c, userId, { agentEnabled, agentAutoDraft, agentPersona }) {
-		await orm(c).update(user)
-			.set({ agentEnabled, agentAutoDraft, agentPersona })
-			.where(eq(user.userId, userId))
-			.run();
+	async updateAgentSettings(c, userId, fields) {
+		const updateData = {};
+		if (fields.agentEnabled !== undefined) updateData.agentEnabled = fields.agentEnabled;
+		if (fields.agentAutoDraft !== undefined) updateData.agentAutoDraft = fields.agentAutoDraft;
+		if (fields.agentPersona !== undefined) updateData.agentPersona = fields.agentPersona;
+		if (fields.agentProvider !== undefined) updateData.agentProvider = fields.agentProvider;
+		if (fields.agentCfAccountId !== undefined) updateData.agentCfAccountId = fields.agentCfAccountId;
+		if (fields.agentAiGatewayId !== undefined) updateData.agentAiGatewayId = fields.agentAiGatewayId;
+		if (fields.agentGatewayProvider !== undefined) updateData.agentGatewayProvider = fields.agentGatewayProvider;
+		if (fields.agentBaseUrl !== undefined) updateData.agentBaseUrl = fields.agentBaseUrl;
+		if (fields.agentApiKey !== undefined) updateData.agentApiKey = fields.agentApiKey;
+		if (fields.agentModel !== undefined) updateData.agentModel = fields.agentModel;
+
+		if (Object.keys(updateData).length > 0) {
+			await orm(c).update(user)
+				.set(updateData)
+				.where(eq(user.userId, userId))
+				.run();
+		}
 	}
 };
 

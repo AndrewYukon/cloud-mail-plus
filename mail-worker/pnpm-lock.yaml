@@ -56,6 +56,9 @@ importers:
       uuid:
         specifier: ^11.1.0
         version: 11.1.0
+      '@ai-sdk/openai':
+        specifier: ^3.0.115
+        version: 3.0.115(zod@4.4.1)
       workers-ai-provider:
         specifier: ^3.1.13
         version: 3.1.13(@ai-sdk/provider@3.0.10)(ai@6.0.172(zod@4.4.1))
@@ -372,6 +375,22 @@ packages:
 
   '@cfworker/json-schema@4.1.1':
     resolution: {integrity: sha512-gAmrUZSGtKc3AiBL71iNWxDsyUC5uMaKKGdvzYsBoTW/xi42JQHl7eKV2OYzCUqvc+D2RCcf7EXY2iCyFIk6og==}
+
+  '@ai-sdk/openai@3.0.115':
+    resolution: {integrity: sha512-4gNoCKEcr+nAtL/w/ZZl2fi4dXiicbJUK9qsoXGkhhJfbWWtOBXcH/xpmau6aZf+yaKqBtwm9SpCM8F5mk2Jsg==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
+  '@ai-sdk/provider-utils@4.0.52':
+    resolution: {integrity: sha512-cUimyIz1jjwYoF9n6HO7sU+UBW7Nu3T4lW7562yRvEhM9/8JqlW4cecxSpkiafjRzAphZG2NfJ3/Ch5cHoCIhg==}
+    engines: {node: '>=18.17'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
+  '@ai-sdk/provider@3.0.16':
+    resolution: {integrity: sha512-9Av6kg0t/IN/dcYAAmEJ4B9OPhcEJqwSR+GfHEA8olRkindXpUHadc3p3cyvgFUQFTVm1G5thtsmgZ9yVb2w3A==}
+    engines: {node: '>=18'}
 
   '@cloudflare/ai-chat@0.6.0':
     resolution: {integrity: sha512-zFByilJzQdtbSJizerJF5B/r6AxY2k4K1rsV9/lZ9boz5XYfH9PZidql+Faf0YeCn5jVlUrF74AqX0P6j8rLuA==}
@@ -3058,6 +3077,10 @@ packages:
     resolution: {integrity: sha512-raqeBD6NQK4SkWhQzeYKd1KmIG6dllBOTt55Rmkt4HtI9mwdWtJljnrXjAFUBLTSN67HWrOIZ3EPF4kjUw80Bg==}
     engines: {node: '>=14.0'}
 
+  undici@6.28.1:
+    resolution: {integrity: sha512-zWpdTVD54H48CIybL0rWQ3ukpb9d23wM7eH5RtfdmeP70cWHNjtfo7P4vZX+5CoDcO53J4Pu5uXp7lNfjc6DRA==}
+    engines: {node: '>=18.17'}
+
   undici@7.15.0:
     resolution: {integrity: sha512-7oZJCPvvMvTd0OlqWsIxTuItTpJBpU1tcbVl24FMn3xt3+VSunwUasmfPJRE57oNO1KsZ4PgA1xTdAX4hq8NyQ==}
     engines: {node: '>=20.18.1'}
@@ -3299,6 +3322,24 @@ packages:
     resolution: {integrity: sha512-a6ENMBBGZBsnlSebQ/eKCguSBeGKSf4O7BPnqVPmYGtpBYI7VSqoVqw+QcB7kPRjbqPwhYTpFbVj/RqNz/CT0Q==}
 
 snapshots:
+
+  '@ai-sdk/openai@3.0.115(zod@4.4.1)':
+    dependencies:
+      '@ai-sdk/provider': 3.0.16
+      '@ai-sdk/provider-utils': 4.0.52(zod@4.4.1)
+      zod: 4.4.1
+
+  '@ai-sdk/provider-utils@4.0.52(zod@4.4.1)':
+    dependencies:
+      '@ai-sdk/provider': 3.0.16
+      '@standard-schema/spec': 1.1.0
+      eventsource-parser: 3.0.8
+      undici: 6.28.1
+      zod: 4.4.1
+
+  '@ai-sdk/provider@3.0.16':
+    dependencies:
+      json-schema: 0.4.0
 
   '@ai-sdk/gateway@3.0.107(zod@4.4.1)':
     dependencies:
@@ -6466,6 +6507,8 @@ snapshots:
   undici@5.29.0:
     dependencies:
       '@fastify/busboy': 2.1.1
+
+  undici@6.28.1: {}
 
   undici@7.15.0: {}
 

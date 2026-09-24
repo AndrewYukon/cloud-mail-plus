@@ -31,8 +31,17 @@ const dbInit = {
 		await this.v3DB(c);
 		await this.v3_1DB(c);
 		await this.v3_2DB(c);
+		await this.v3_3DB(c);
 		await settingService.refresh(c);
 		return c.text('success');
+	},
+
+	async v3_3DB(c) {
+		try {
+			await this.initAgentColumns(c);
+		} catch (e) {
+			console.warn(`跳过字段：${e.message}`);
+		}
 	},
 
 	async v3_2DB(c) {
@@ -685,24 +694,41 @@ const dbInit = {
 		const existing = await c.env.db.prepare(
 			`SELECT name FROM pragma_table_info('user') WHERE name = 'agent_enabled' LIMIT 1`
 		).first();
-		if (existing) return;
+		if (!existing) {
+			await c.env.db.batch([
+				c.env.db.prepare(`ALTER TABLE user ADD COLUMN agent_enabled INTEGER NOT NULL DEFAULT 0`),
+				c.env.db.prepare(`ALTER TABLE user ADD COLUMN agent_auto_draft INTEGER NOT NULL DEFAULT 0`),
+				c.env.db.prepare(`ALTER TABLE user ADD COLUMN agent_persona TEXT NOT NULL DEFAULT ''`),
+				c.env.db.prepare(`ALTER TABLE email ADD COLUMN ai_metadata TEXT NOT NULL DEFAULT ''`),
+				c.env.db.prepare(`
+					CREATE TABLE IF NOT EXISTS agent_message (
+						id INTEGER PRIMARY KEY AUTOINCREMENT,
+						user_id INTEGER NOT NULL,
+						role TEXT NOT NULL,
+						parts TEXT NOT NULL,
+						create_time TEXT DEFAULT CURRENT_TIMESTAMP
+					)
+				`),
+				c.env.db.prepare(`CREATE INDEX IF NOT EXISTS idx_agent_message_user ON agent_message(user_id, id)`),
+			]);
+		}
 
-		await c.env.db.batch([
-			c.env.db.prepare(`ALTER TABLE user ADD COLUMN agent_enabled INTEGER NOT NULL DEFAULT 0`),
-			c.env.db.prepare(`ALTER TABLE user ADD COLUMN agent_auto_draft INTEGER NOT NULL DEFAULT 0`),
-			c.env.db.prepare(`ALTER TABLE user ADD COLUMN agent_persona TEXT NOT NULL DEFAULT ''`),
-			c.env.db.prepare(`ALTER TABLE email ADD COLUMN ai_metadata TEXT NOT NULL DEFAULT ''`),
-			c.env.db.prepare(`
-				CREATE TABLE IF NOT EXISTS agent_message (
-					id INTEGER PRIMARY KEY AUTOINCREMENT,
-					user_id INTEGER NOT NULL,
-					role TEXT NOT NULL,
-					parts TEXT NOT NULL,
-					create_time TEXT DEFAULT CURRENT_TIMESTAMP
-				)
-			`),
-			c.env.db.prepare(`CREATE INDEX IF NOT EXISTS idx_agent_message_user ON agent_message(user_id, id)`),
-		]);
+		const hasProvider = await c.env.db.prepare(
+			`SELECT name FROM pragma_table_info('user') WHERE name = 'agent_provider' LIMIT 1`
+		).first();
+		if (!hasProvider) {
+			await c.env.db.batch([
+				c.env.db.prepare(`ALTER TABLE user ADD COLUMN agent_provider TEXT NOT NULL DEFAULT 'workers-ai'`),
+				c.env.db.prepare(`ALTER TABLE user ADD COLUMN agent_cf_account_id TEXT NOT NULL DEFAULT ''`),
+				c.env.db.prepare(`ALTER TABLE user ADD COLUMN agent_ai_gateway_id TEXT NOT NULL DEFAULT ''`),
+				c.env.db.prepare(`ALTER TABLE user ADD COLUMN agent_gateway_provider TEXT NOT NULL DEFAULT 'openai'`),
+				c.env.db.prepare(`ALTER TABLE user ADD COLUMN agent_base_url TEXT NOT NULL DEFAULT ''`),
+				c.env.db.prepare(`ALTER TABLE user ADD COLUMN agent_api_key TEXT NOT NULL DEFAULT ''`),
+				c.env.db.prepare(`ALTER TABLE user ADD COLUMN agent_model TEXT NOT NULL DEFAULT ''`),
+			]);
+		}
+
+		await c.env.db.prepare(`CREATE INDEX IF NOT EXISTS idx_email_user_status_type ON email(user_id, status, type)`).run().catch(() => {});
 	}
 };
 export { dbInit };
