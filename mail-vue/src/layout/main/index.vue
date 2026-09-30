@@ -3,7 +3,7 @@
     <div :class="accountShow && hasPerm('account:query') ? 'block-show' : 'block-hide'" @click="uiStore.accountShow = false"></div>
     <account  :class="accountShow && hasPerm('account:query') ? 'show' : 'hide'" />
     <router-view class="main-view" v-slot="{ Component,route }">
-      <keep-alive :include="['email','all-email','send','sys-setting','star','user','role','analysis','reg-key','draft']">
+      <keep-alive :include="['email','all-email','send','sys-setting','star','junk','archive','user','role','analysis','reg-key','draft']">
         <component :is="Component" :key="route.name"/>
       </keep-alive>
     </router-view>

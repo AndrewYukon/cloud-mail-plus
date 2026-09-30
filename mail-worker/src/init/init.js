@@ -31,8 +31,22 @@ const dbInit = {
 		await this.v3DB(c);
 		await this.v3_1DB(c);
 		await this.v3_2DB(c);
+		await this.v3_3DB(c);
 		await settingService.refresh(c);
 		return c.text('success');
+	},
+
+	async v3_3DB(c) {
+		try {
+			await c.env.db.prepare(`ALTER TABLE email ADD COLUMN folder INTEGER NOT NULL DEFAULT 0;`).run();
+		} catch (e) {
+			console.warn(`跳过字段：${e.message}`);
+		}
+		try {
+			await c.env.db.prepare(`CREATE INDEX IF NOT EXISTS idx_email_user_folder ON email(user_id, folder)`).run();
+		} catch (e) {
+			console.warn(`跳过字段：${e.message}`);
+		}
 	},
 
 	async v3_2DB(c) {

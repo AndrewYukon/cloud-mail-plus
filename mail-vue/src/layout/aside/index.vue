@@ -26,6 +26,16 @@
           <Icon icon="solar:star-line-duotone" width="20" height="20" />
           <span class="menu-name" style="margin-left: 21px">{{$t('starred')}}</span>
         </el-menu-item>
+        <el-menu-item @click="router.push({name: 'junk'})" index="junk"
+                      :class="route.meta.name === 'junk' ? 'choose-item' : ''">
+          <Icon icon="solar:danger-triangle-line-duotone" width="20" height="20" />
+          <span class="menu-name" style="margin-left: 21px">{{$t('junk')}}</span>
+        </el-menu-item>
+        <el-menu-item @click="router.push({name: 'archive'})" index="archive"
+                      :class="route.meta.name === 'archive' ? 'choose-item' : ''">
+          <Icon icon="solar:archive-line-duotone" width="20" height="20" />
+          <span class="menu-name" style="margin-left: 21px">{{$t('archive')}}</span>
+        </el-menu-item>
         <el-menu-item @click="router.push({name: 'setting'})" index="setting"
                       :class="route.meta.name === 'setting' ? 'choose-item' : ''">
           <Icon icon="fluent:settings-48-regular" width="20" height="20" />

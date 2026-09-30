@@ -54,6 +54,11 @@ export const emailConst = {
 	unread: {
 		UNREAD: 0,
 		READ: 1
+	},
+	folder: {
+		INBOX: 0,
+		JUNK: 1,
+		ARCHIVE: 2
 	}
 }
 

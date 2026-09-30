@@ -64,6 +64,11 @@ app.put('/email/read', async (c) => {
 	return c.json(result.ok());
 })
 
+app.put('/email/move', async (c) => {
+	await emailService.move(c, await c.req.json(), userContext.getUserId(c));
+	return c.json(result.ok());
+})
+
 // Export email as .eml file (#323)
 app.get('/email/export', async (c) => {
 	const userId = userContext.getUserId(c);

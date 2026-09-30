@@ -51,6 +51,26 @@ const routes = [
                     menu: true
                 }
             },
+            {
+                path: '/junk',
+                name: 'junk',
+                component: () => import('@/views/junk/index.vue'),
+                meta: {
+                    title: 'junk',
+                    name: 'junk',
+                    menu: true
+                }
+            },
+            {
+                path: '/archive',
+                name: 'archive',
+                component: () => import('@/views/archive/index.vue'),
+                meta: {
+                    title: 'archive',
+                    name: 'archive',
+                    menu: true
+                }
+            },
         ]
 
     },
