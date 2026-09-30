@@ -10,9 +10,13 @@ const MODEL_ID = '@cf/moonshotai/kimi-k2.5';
 //   env.EMAIL_AGENT.idFromName(`user-${userId}`)
 export class EmailAgent extends AIChatAgent {
 
+  // Default state — the agents package's `this.state` getter returns this
+  // until setState() overwrites it. Prevents `undefined` on first call.
+  initialState = {};
+
   // Called by AIChatAgent when a new chat message arrives over the websocket / SSE pipe.
   async onChatMessage(onFinish) {
-    const { userId, userEmail, persona, currentBoxName, locale } = await this._loadContext();
+    const { userId, userEmail, persona, currentBoxName, locale } = this._loadContext();
     const workersai = createWorkersAI({ binding: this.env.AI });
     const tools = buildTools({ env: this.env, userId, userEmail });
 
@@ -31,14 +35,14 @@ export class EmailAgent extends AIChatAgent {
   // Server-side handler for the confirm-then-execute tools (sendDraft, deleteEmail).
   // Client posts to this when the user clicks "Confirm" in ToolConfirmation.vue.
   async runConfirmedTool({ name, args }) {
-    const { userId, userEmail } = await this._loadContext();
+    const { userId, userEmail } = this._loadContext();
     return await executeConfirmedTool({ env: this.env, userId, userEmail, name, args });
   }
 
   // Auto-draft entry point — called by the email() handler on a freshly-stored email.
   // Generates a draft (no send), inserts into Drafts mailbox with ai_metadata.
   async autoDraftReply({ emailId }) {
-    const { userId, userEmail, persona } = await this._loadContext();
+    const { userId, userEmail, persona } = this._loadContext();
     if (!userId) return { skipped: true, reason: 'no-userId' };
 
     // Fetch the original email server-side
@@ -65,12 +69,14 @@ export class EmailAgent extends AIChatAgent {
   }
 
   // Persist user/persona context for this DO instance. Called once per session by the API layer.
+  // Merges into existing state so partial updates don't drop earlier fields.
   async setContext({ userId, userEmail, persona, currentBoxName, locale }) {
-    await this.setState({ userId, userEmail, persona, currentBoxName, locale });
+    this.setState({ ...this.state, userId, userEmail, persona, currentBoxName, locale });
     return { ok: true };
   }
 
-  async _loadContext() {
-    return (await this.getState()) || {};
+  // Synchronous — `agents` v0.12+ exposes state via a getter, not getState().
+  _loadContext() {
+    return this.state || {};
   }
 }
