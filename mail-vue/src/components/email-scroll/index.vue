@@ -28,6 +28,24 @@
         <Icon v-perm="'email:delete'" class="icon delete" icon="fluent:mail-read-20-regular" width="21" height="21"
               v-if="getSelectedMailsIds().length > 0 && showUnread"
               @click="handleRead"/>
+        <template v-if="emailMove && getSelectedMailsIds().length > 0">
+          <el-tooltip v-if="props.type === 'junk'" :content="$t('notJunk')" placement="top">
+            <Icon class="icon" icon="solar:inbox-line-duotone" width="19" height="19"
+                  @click="handleMove(0)"/>
+          </el-tooltip>
+          <el-tooltip v-if="props.type === 'archive'" :content="$t('moveToInbox')" placement="top">
+            <Icon class="icon" icon="solar:inbox-line-duotone" width="19" height="19"
+                  @click="handleMove(0)"/>
+          </el-tooltip>
+          <el-tooltip v-if="props.type === 'email'" :content="$t('moveToJunk')" placement="top">
+            <Icon class="icon" icon="solar:danger-triangle-line-duotone" width="19" height="19"
+                  @click="handleMove(1)"/>
+          </el-tooltip>
+          <el-tooltip v-if="['email', 'junk'].includes(props.type)" :content="$t('moveToArchive')" placement="top">
+            <Icon class="icon" icon="solar:archive-line-duotone" width="19" height="19"
+                  @click="handleMove(2)"/>
+          </el-tooltip>
+        </template>
       </div>
 
       <div class="header-right">
@@ -162,7 +180,7 @@
     >
       <template #dropdown>
         <el-dropdown-menu>
-          <el-dropdown-item v-if="['email'].includes(props.type)" @click="emailRead(rightClickEmail.emailId)" >
+          <el-dropdown-item v-if="['email','junk','archive'].includes(props.type)" @click="emailRead(rightClickEmail.emailId)" >
             <template #default>
               <div class="right-dropdown-item">
                 <Icon icon="fluent:mail-read-20-regular" width="20" height="20" />
@@ -252,6 +270,7 @@ const props = defineProps({
   emailDelete: Function,
   emailPermanentDelete: Function,
   emailRead: Function,
+  emailMove: Function,
   starAdd: Function,
   starCancel: Function,
   cancelSuccess: Function,
@@ -691,6 +710,18 @@ function handleDelete() {
       emailStore.deleteIds = emailIds;
     })
   })
+}
+
+async function handleMove(folder) {
+  const emailIds = getSelectedMailsIds();
+  if (emailIds.length === 0) return;
+  await props.emailMove(emailIds, folder);
+  ElMessage({
+    message: t('moveSuccessMsg'),
+    type: 'success',
+    plain: true
+  })
+  emailStore.deleteIds = emailIds;
 }
 
 function handleBatchExport() {

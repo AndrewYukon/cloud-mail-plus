@@ -15,9 +15,9 @@ export function buildTools({ env, userId, userEmail }) {
 
   return {
     listEmails: tool({
-      description: 'List emails in a mailbox (inbox / sent / drafts / trash) for the current user.',
+      description: 'List emails in a mailbox (inbox / junk / archive / sent / drafts / trash). Inbox excludes junk and archived mail (e.g. DMARC reports) for the current user.',
       inputSchema: z.object({
-        box: z.enum(['inbox', 'sent', 'drafts', 'trash']).describe('Mailbox to list'),
+        box: z.enum(['inbox', 'junk', 'archive', 'sent', 'drafts', 'trash']).describe('Mailbox to list'),
         page: z.number().int().min(1).default(1),
         size: z.number().int().min(1).max(50).default(20),
         unreadOnly: z.boolean().default(false),
@@ -27,7 +27,9 @@ export function buildTools({ env, userId, userEmail }) {
         if (box === 'trash') conds.push(eq(emailEntity.isDel, isDel.DELETE));
         else conds.push(eq(emailEntity.isDel, isDel.NORMAL));
 
-        if (box === 'inbox')      conds.push(eq(emailEntity.type, emailConst.type.RECEIVE));
+        if (box === 'inbox')      conds.push(eq(emailEntity.type, emailConst.type.RECEIVE), eq(emailEntity.folder, emailConst.folder.INBOX));
+        else if (box === 'junk')  conds.push(eq(emailEntity.type, emailConst.type.RECEIVE), eq(emailEntity.folder, emailConst.folder.JUNK));
+        else if (box === 'archive') conds.push(eq(emailEntity.type, emailConst.type.RECEIVE), eq(emailEntity.folder, emailConst.folder.ARCHIVE));
         else if (box === 'sent')  conds.push(eq(emailEntity.type, emailConst.type.SEND), eq(emailEntity.status, emailConst.status.SENT));
         else if (box === 'drafts') conds.push(eq(emailEntity.type, emailConst.type.SEND), eq(emailEntity.status, emailConst.status.SAVING));
 

@@ -10,6 +10,7 @@ import emailUtils from '../utils/email-utils';
 import roleService from '../service/role-service';
 import userService from '../service/user-service';
 import telegramService from '../service/telegram-service';
+import { decideInboundFolder } from '../utils/folder-utils';
 
 export async function email(message, env, ctx) {
 
@@ -89,6 +90,28 @@ export async function email(message, env, ctx) {
 
 		const toName = email.to.find(item => item.address === message.to)?.name || '';
 
+		// Folder routing: phishing-suspect -> Junk, DMARC reports -> Archive
+		let folder = emailConst.folder.INBOX;
+
+		if (account) {
+			const decision = decideInboundFolder({
+				fromAddress: email.from?.address || '',
+				fromName: email.from?.name || '',
+				recipient: account.email,
+				subject: email.subject || '',
+				html: email.html || '',
+				text: email.text || '',
+				authResults: message.headers?.get?.('authentication-results') || ''
+			});
+			folder = decision.folder;
+
+			if (folder === emailConst.folder.JUNK) {
+				console.warn(`[phish] → Junk for ${account.email} from ${email.from?.address}: ${decision.reasons.join(' | ')}`);
+			} else if (folder === emailConst.folder.ARCHIVE) {
+				console.warn(`[dmarc] → Archive for ${account.email} from ${email.from?.address}`);
+			}
+		}
+
 		const params = {
 			toEmail: message.to,
 			toName: toName,
@@ -105,6 +128,7 @@ export async function email(message, env, ctx) {
 			messageId: email.messageId,
 			userId: account ? account.userId : 0,
 			accountId: account ? account.accountId : 0,
+			folder: folder,
 			isDel: isDel.DELETE,
 			status: emailConst.status.SAVING
 		};
@@ -141,10 +165,13 @@ export async function email(message, env, ctx) {
 		emailRow = await emailService.completeReceive({ env }, account ? emailConst.status.RECEIVE : emailConst.status.NOONE, emailRow.emailId);
 
 		// AI auto-draft hook (no-op if user has agent.autoDraft disabled or bindings missing)
-		try {
-			const { maybeAutoDraft } = await import('../agent/auto-draft.js');
-			await maybeAutoDraft({ env, executionCtx: { waitUntil: (p) => p } }, { emailId: emailRow.emailId, userId: emailRow.userId });
-		} catch (err) { console.error('[auto-draft hook]', err); }
+		// Only for inbox mail: never draft replies to junk or archived reports
+		if (folder === emailConst.folder.INBOX) {
+			try {
+				const { maybeAutoDraft } = await import('../agent/auto-draft.js');
+				await maybeAutoDraft({ env, executionCtx: { waitUntil: (p) => p } }, { emailId: emailRow.emailId, userId: emailRow.userId });
+			} catch (err) { console.error('[auto-draft hook]', err); }
+		}
 
 		if (ruleType === settingConst.ruleType.RULE) {
 
@@ -156,13 +183,13 @@ export async function email(message, env, ctx) {
 
 		}
 
-		//转发到TG
-		if (tgBotStatus === settingConst.tgBotStatus.OPEN && tgChatId) {
+		//转发到TG（仅收件箱邮件：垃圾/归档不推送通知）
+		if (folder === emailConst.folder.INBOX && tgBotStatus === settingConst.tgBotStatus.OPEN && tgChatId) {
 			await telegramService.sendEmailToBot({ env }, emailRow)
 		}
 
-		//转发到其他邮箱
-		if (forwardStatus === settingConst.forwardStatus.OPEN && forwardEmail) {
+		//转发到其他邮箱（垃圾邮件不转发；归档仍转发，转发是用户的显式配置）
+		if (folder !== emailConst.folder.JUNK && forwardStatus === settingConst.forwardStatus.OPEN && forwardEmail) {
 
 			const emails = forwardEmail.split(',');
 
