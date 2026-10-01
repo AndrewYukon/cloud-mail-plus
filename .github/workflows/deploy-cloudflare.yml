@@ -41,7 +41,9 @@ jobs:
       - name: ⚙ 设置 pnpm / Set up pnpm
         uses: pnpm/action-setup@v4.1.0
         with:
-          version: latest
+          # Pinned: pnpm 11+ ignores package.json "pnpm.onlyBuiltDependencies" and fails
+          # the frozen install with ERR_PNPM_IGNORED_BUILDS (every main deploy since 2026-08-29).
+          version: 10
 
       - name: ⚙ 设置 Node.js / Set up Node.js
         uses: actions/setup-node@v4
