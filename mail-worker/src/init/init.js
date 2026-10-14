@@ -32,8 +32,25 @@ const dbInit = {
 		await this.v3_1DB(c);
 		await this.v3_2DB(c);
 		await this.v3_3DB(c);
+		await this.v3_4DB(c);
 		await settingService.refresh(c);
 		return c.text('success');
+	},
+
+	// Indexes for the three lookups that were full-table scans (2026-10-14):
+	// external-api inbox polling by recipient, delivery events by Message-ID,
+	// and attachment lookups by email. Named v3_4 because cloud-mail-plus
+	// already uses v3_2 / v3_3 (translation table, mail folders).
+	async v3_4DB(c) {
+		try {
+			await c.env.db.batch([
+				c.env.db.prepare(`CREATE INDEX IF NOT EXISTS idx_email_to_email_is_del ON email(to_email, is_del)`),
+				c.env.db.prepare(`CREATE INDEX IF NOT EXISTS idx_email_message_id_type ON email(message_id, type)`),
+				c.env.db.prepare(`CREATE INDEX IF NOT EXISTS idx_attachments_email_id ON attachments(email_id)`),
+			]);
+		} catch (e) {
+			console.warn(`跳过索引：${e.message}`);
+		}
 	},
 
 	async v3_3DB(c) {
