@@ -28,6 +28,7 @@ export function createTestDb() {
 			unread INTEGER NOT NULL DEFAULT 0,
 			create_time TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			ai_metadata TEXT NOT NULL DEFAULT '',
+			folder INTEGER NOT NULL DEFAULT 0,
 			is_del INTEGER NOT NULL DEFAULT 0
 		);
 		CREATE TABLE email_translation (

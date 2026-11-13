@@ -1,7 +1,15 @@
 import { emailConst } from '../const/entity-const';
 import email from '../entity/email';
 import orm from '../entity/orm';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
+import { Resend } from 'resend';
+import settingService from './setting-service';
+import emailUtils from '../utils/email-utils';
+import { executeFallback, fallbackIdempotencyKey, fallbackMetaKey, planFallback, RetryableFallbackError } from './blocklist-fallback';
+
+// Must equal the consumer's max_retries + 1 in wrangler.toml (attempts is 1-based).
+const MAX_ATTEMPTS = 4;
+const RETRY_DELAY_SECONDS = 60;
 
 /**
  * Cloudflare Email Service — outbound delivery event consumer.
@@ -94,10 +102,10 @@ function shortEventName(type) {
  * Compact, queryable summary persisted into `email.message`. Mirrors the shape
  * resend-service already stores there so downstream readers stay uniform.
  */
-function buildMessage(evtName, payload) {
+function summarize(evtName, payload) {
 	const delivery = payload.delivery || {};
 	const bounce = payload.bounce || {};
-	return JSON.stringify({
+	return {
 		event: evtName,
 		terminal: payload.terminal === true,
 		recipient: payload.recipient || null,
@@ -107,7 +115,62 @@ function buildMessage(evtName, payload) {
 		bounceType: bounce.type || null,
 		classification: bounce.classification || null,
 		reason: bounce.reason || delivery.smtpResponse || null,
-	});
+	};
+}
+
+function buildMessage(evtName, payload, extra) {
+	return JSON.stringify({ ...summarize(evtName, payload), ...(extra || {}) });
+}
+
+/**
+ * Sender block-list bounce → re-send this one recipient through Resend (see
+ * blocklist-fallback.js for why and for the gate).
+ * Returns an outcome string when the event is fully handled here, or
+ * `{ note }` to be attached to the normally-recorded bounce.
+ */
+async function tryBlocklistFallback(c, row, evtName, payload, { finalAttempt }) {
+	if (evtName !== 'message.bounced') return null;
+
+	const { resendTokens } = await settingService.query(c);
+	const resendToken = (resendTokens || {})[emailUtils.getDomain(row.sendEmail)];
+	const meta = resendToken
+		? await c.env.kv.get(fallbackMetaKey(row.emailId), { type: 'json' })
+		: null;
+
+	const plan = planFallback({ evtName, payload, row, resendToken, meta });
+	if (plan.action === 'none') return null;
+	if (plan.action === 'skip') {
+		console.warn(`[email-event] blocklist bounce not re-sent (${plan.reason}): emailId=${row.emailId}`);
+		return { note: { fallback: { skipped: plan.reason } } };
+	}
+
+	// A RetryableFallbackError or a D1 error from markResent propagates to
+	// consumeBatch → msg.retry(); the idempotency key turns that retry into a
+	// replay of the same Resend send, never a second email.
+	const result = await executeFallback({
+		send: (form, options) => new Resend(resendToken).emails.send(form, options),
+		markResent: async (resendEmailId) => {
+			await orm(c).update(email).set({
+				status: emailConst.status.SENT,
+				resendEmailId,
+				message: JSON.stringify({
+					event: 'fallback.resend',
+					terminal: false,
+					recipient: payload.recipient || null,
+					provider: 'resend',
+					previousBounce: summarize(evtName, payload),
+				}),
+			}).where(eq(email.emailId, row.emailId)).run();
+		},
+	}, plan, fallbackIdempotencyKey(row.emailId), { finalAttempt });
+
+	if (result.ok) {
+		return `fallback:resend:emailId=${row.emailId}:resendEmailId=${result.resendEmailId}`;
+	}
+	console.error(`[email-event] blocklist fallback failed for emailId=${row.emailId}: ${result.error}`);
+	const note = { error: result.error };
+	if (result.retryable) note.retriesExhausted = true;
+	return { note: { fallback: note } };
 }
 
 const emailEventService = {
@@ -117,7 +180,7 @@ const emailEventService = {
 	 * Never throws on "we don't care about this event" — only on real
 	 * infrastructure failure, so the caller can retry the queue message.
 	 */
-	async applyEvent(env, body) {
+	async applyEvent(env, body, { finalAttempt = false } = {}) {
 		if (!body || typeof body !== 'object') {
 			return 'skip:not-an-object';
 		}
@@ -148,16 +211,33 @@ const emailEventService = {
 			return `unmatched:${evtName}:${messageId}`;
 		}
 
+		// Once a block-list fallback has re-sent this message through Resend, the
+		// CF copy is dead: a redelivered or late CF event must not overwrite the
+		// row (that would flip a re-sent message back to "bounced").
+		if (row.resendEmailId) {
+			return `ignored:${evtName}:after-resend-fallback`;
+		}
+
+		const fallback = await tryBlocklistFallback(c, row, evtName, payload, { finalAttempt });
+		if (typeof fallback === 'string') {
+			return fallback;
+		}
+
 		const currentRank = RANK[row.status] || 0;
 		const nextRank = RANK[status] || 0;
 		if (nextRank < currentRank) {
 			return `ignored:${evtName}:would-downgrade-from-${row.status}`;
 		}
 
+		// Conditional on resend_email_id so a concurrent fallback that already
+		// recorded its Resend id is never overwritten by this CF event.
 		await orm(c).update(email).set({
 			status,
-			message: buildMessage(evtName, payload),
-		}).where(eq(email.emailId, row.emailId)).run();
+			message: buildMessage(evtName, payload, fallback?.note),
+		}).where(and(
+			eq(email.emailId, row.emailId),
+			isNull(email.resendEmailId),
+		)).run();
 
 		return `applied:${evtName}:emailId=${row.emailId}`;
 	},
@@ -171,12 +251,15 @@ const emailEventService = {
 		for (const msg of batch.messages) {
 			try {
 				const body = typeof msg.body === 'string' ? JSON.parse(msg.body) : msg.body;
-				const outcome = await this.applyEvent(env, body);
+				const finalAttempt = (msg.attempts || 1) >= MAX_ATTEMPTS;
+				const outcome = await this.applyEvent(env, body, { finalAttempt });
 				console.log(`[email-event] ${outcome}`);
 				msg.ack();
 			} catch (e) {
 				console.error(`[email-event] FAILED, will retry: ${e.message || e}`);
-				msg.retry();
+				// Give an in-flight or rate-limited Resend call time to settle
+				// instead of burning the retry budget immediately.
+				msg.retry(e instanceof RetryableFallbackError ? { delaySeconds: RETRY_DELAY_SECONDS } : undefined);
 			}
 		}
 	},

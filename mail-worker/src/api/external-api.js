@@ -5,6 +5,7 @@ import settingService from '../service/setting-service';
 import cfEmailService from '../service/cf-email-service';
 import emailService from '../service/email-service';
 import { normalizeMessageId } from '../service/email-event-service';
+import { buildFallbackMeta, fallbackMetaKey, FALLBACK_META_TTL_SECONDS } from '../service/blocklist-fallback';
 import attService from '../service/att-service';
 import starService from '../service/star-service';
 import emlService from '../service/eml-service';
@@ -161,6 +162,21 @@ app.post('/external/send', async (c) => {
 	};
 
 	const emailRow = await orm(c).insert(email).values(emailData).returning().get();
+
+	// Only domains with a Resend token can be re-sent after a sender block-list
+	// bounce; keep what D1 does not store so that re-send is the same message.
+	// A failure here costs only the fallback, never the send that already happened.
+	if (cfSent && resendToken) {
+		try {
+			await c.env.kv.put(
+				fallbackMetaKey(emailRow.emailId),
+				JSON.stringify(buildFallbackMeta(sendForm)),
+				{ expirationTtl: FALLBACK_META_TTL_SECONDS },
+			);
+		} catch (e) {
+			console.error(`[External API] could not store blocklist-fallback meta for emailId=${emailRow.emailId}: ${e.message}`);
+		}
+	}
 
 	return c.json(result.ok({
 		emailId: emailRow.emailId,
